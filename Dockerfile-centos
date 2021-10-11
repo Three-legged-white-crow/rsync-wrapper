@@ -1,0 +1,34 @@
+# build transporter
+FROM golang as builder
+
+COPY transporter /projects/transporter
+WORKDIR /projects/transporter
+RUN make build
+
+
+# final image
+FROM centos:centos7
+
+COPY --from=builder /projects/transporter/cmd/transporter /usr/local/bin/
+
+# build rsync
+RUN yum -y install epel-release && \
+	yum -y install gcc g++ gawk autoconf automake make && \
+    yum -y install acl libacl-devel && \
+    yum -y install attr libattr-devel && \
+    yum -y install xxhash-devel && \
+    yum -y install libzstd-devel && \
+    yum -y install lz4-devel && \
+    yum -y install openssl-devel
+
+COPY rsync /projects/rsync
+WORKDIR /projects/rsync
+RUN ./configure --disable-md2man && \
+    make
+
+RUN mv rsync /usr/local/bin/
+RUN /usr/local/bin/rsync --version
+
+# clean
+RUN rm -rf /projects/* && \
+    yum clean all
