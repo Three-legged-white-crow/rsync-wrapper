@@ -2171,8 +2171,8 @@ struct file_list *send_file_list(int f, int argc, char *argv[])
 	rprintf(FLOG, "building file list\n");
 	if (show_filelist_progress)
 		start_filelist_progress("building file list");
-	else if (inc_recurse && INFO_GTE(FLIST, 1) && !am_server)
-		rprintf(FCLIENT, "sending incremental file list\n");
+//	else if (inc_recurse && INFO_GTE(FLIST, 1) && !am_server)
+//		rprintf(FCLIENT, "sending incremental file list\n");
 
 	start_write = stats.total_written;
 	gettimeofday(&start_tv, NULL);

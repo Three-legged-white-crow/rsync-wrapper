@@ -267,8 +267,10 @@ void send_files(int f_in, int f_out)
 			recv_xattr_request(file, f_in);
 #endif
 
+		// if not in transmission at now
 		if (!(iflags & ITEM_TRANSFER)) {
-			maybe_log_item(file, iflags, itemizing, xname);
+			// not output name
+//			maybe_log_item(file, iflags, itemizing, xname);
 			write_ndx_and_attrs(f_out, ndx, iflags, fname, file, fnamecmp_type, xname, xlen);
 			if (iflags & ITEM_IS_NEW) {
 				stats.created_files++;
@@ -322,6 +324,7 @@ void send_files(int f_in, int f_out)
 
 		remember_initial_stats();
 
+		// dry run
 		if (!do_xfers) { /* log the transfer */
 			log_item(FCLIENT, file, iflags, NULL);
 			write_ndx_and_attrs(f_out, ndx, iflags, fname, file, fnamecmp_type, xname, xlen);
@@ -379,18 +382,24 @@ void send_files(int f_in, int f_out)
 		if (DEBUG_GTE(DELTASUM, 2))
 			rprintf(FINFO, "calling match_sums %s%s%s\n", path,slash,fname);
 
-		if (log_before_transfer)
-			log_item(FCLIENT, file, iflags, NULL);
-		else if (!am_server && INFO_GTE(NAME, 1) && INFO_EQ(PROGRESS, 1))
-			rprintf(FCLIENT, "%s\n", fname);
+		// [custom]: not output file name before file fransfer
+//		if (log_before_transfer)
+//			log_item(FCLIENT, file, iflags, NULL);
+		// level of progress is default == 0
+//		else if (!am_server && INFO_GTE(NAME, 1) && INFO_EQ(PROGRESS, 1))
+//			rprintf(FCLIENT, "%s\n", fname);
 
 		set_compression(fname);
 
 		match_sums(f_xfer, s, mbuf, st.st_size);
 		if (INFO_GTE(PROGRESS, 1))
 			end_progress(st.st_size);
-		else if (want_progress_now)
-			instant_progress(fname);
+
+		// if info level of progress < 1, want_progress_now is true
+		else if (want_progress_now) {
+			end_progress(0);
+			want_progress_now = False;
+        }
 
 		log_item(log_code, file, iflags, NULL);
 

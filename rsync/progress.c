@@ -58,6 +58,40 @@ static unsigned long msdiff(struct timeval *t1, struct timeval *t2)
 	     + (t2->tv_usec - t1->tv_usec) / 1000;
 }
 
+/*
+ * custom of rprint_progress_custom, only show number of files that transferred and total.
+ * Note maybe number of files that total increase.
+ */
+static void rprint_progress_custom(int is_last) {
+
+	// file is being transferred, not output progress
+	if (!is_last) {
+		return;
+	}
+
+	// at last transferred of file, output progress
+	char eol[128];
+
+	int len = snprintf(eol, sizeof eol, "#xfr%d\n", stats.xferred_files);
+	if (INFO_GTE(PROGRESS, 2)) {
+		static int last_len = 0;
+		/* Drop \n and pad with spaces if line got shorter. */
+		if (last_len < --len)
+			last_len = len;
+		eol[last_len] = '\0';
+		while (last_len > len)
+			eol[--last_len] = ' ';
+		is_last = 0;
+	}
+
+	output_needs_newline = 0;
+	rprintf(FCLIENT, "%s", eol);
+	if (!is_last && !quiet) {
+		output_needs_newline = 1;
+		rflush(FCLIENT);
+	}
+
+}
 
 /**
  * @param ofs Current position in file
@@ -170,10 +204,12 @@ void end_progress(OFF_T size)
 		struct timeval now;
 		gettimeofday(&now, NULL);
 		if (INFO_GTE(PROGRESS, 2) || want_progress_now) {
-			rprint_progress(stats.total_transferred_size,
-					stats.total_size, &now, True);
+//			rprint_progress(stats.total_transferred_size,
+//					stats.total_size, &now, True);
+			rprint_progress_custom(True);
 		} else {
-			rprint_progress(size, size, &now, True);
+//			rprint_progress(size, size, &now, True);
+			rprint_progress_custom(True);
 			memset(&ph_start, 0, sizeof ph_start);
 		}
 	}
@@ -237,5 +273,6 @@ void show_progress(OFF_T ofs, OFF_T size)
 		return;
 #endif
 
-	rprint_progress(ofs, size, &now, False);
+//	rprint_progress(ofs, size, &now, False);
+	rprint_progress_custom(False);
 }

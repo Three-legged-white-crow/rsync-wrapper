@@ -788,8 +788,8 @@ static char *get_local_name(struct file_list *flist, char *dest_path)
 		 && strcmp(flist->files[flist->low]->basename, ".") == 0)
 			flist->files[0]->flags |= FLAG_DIR_CREATED;
 
-		if (INFO_GTE(NAME, 1))
-			rprintf(FINFO, "created directory %s\n", dest_path);
+//		if (INFO_GTE(NAME, 1))
+//			rprintf(FINFO, "created directory %s\n", dest_path);
 
 		if (dry_run) {
 			/* Indicate that dest dir doesn't really exist. */
