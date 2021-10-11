@@ -1,0 +1,117 @@
+name: build
+
+on:
+  push:
+    branches: [ master ]
+    paths-ignore: [ .cirrus.yml ]
+  pull_request:
+    branches: [ master ]
+    paths-ignore: [ .cirrus.yml ]
+  schedule:
+    - cron: '42 8 * * *'
+
+jobs:
+
+  ubuntu-build:
+    runs-on: ubuntu-20.04
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+    - name: prep
+      run: |
+        sudo apt-get install acl libacl1-dev attr libattr1-dev liblz4-dev libzstd-dev libxxhash-dev python3-cmarkgfm openssl
+        echo "::add-path::/usr/local/bin"
+    - name: configure
+      run: ./configure
+    - name: make
+      run: make
+    - name: install
+      run: sudo make install
+    - name: info
+      run: rsync --version
+    - name: check
+      run: sudo RSYNC_MAX_SKIPPED=1 make check
+    - name: check30
+      run: sudo RSYNC_MAX_SKIPPED=1 make check30
+    - name: check29
+      run: sudo RSYNC_MAX_SKIPPED=1 make check29
+    - name: ssl file list
+      run: rsync-ssl --no-motd download.samba.org::rsyncftp/ || true
+    - name: save artifact
+      uses: actions/upload-artifact@v2
+      with:
+        name: ubuntu-bin
+        path: |
+          rsync
+          rsync-ssl
+          rsync.1
+          rsync-ssl.1
+          rsyncd.conf.5
+
+  macos-build:
+    runs-on: macos-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: prep
+      run: |
+        brew install automake openssl xxhash zstd lz4
+        sudo pip3 install commonmark
+        echo "::add-path::/usr/local/bin"
+    - name: configure
+      run: CPPFLAGS=-I/usr/local/opt/openssl/include/ LDFLAGS=-L/usr/local/opt/openssl/lib/ ./configure
+    - name: make
+      run: make
+    - name: install
+      run: sudo make install
+    - name: info
+      run: rsync --version
+    - name: check
+      run: sudo make check
+    - name: ssl file list
+      run: rsync-ssl --no-motd download.samba.org::rsyncftp/ || true
+    - name: save artifact
+      uses: actions/upload-artifact@v2
+      with:
+        name: macos-bin
+        path: |
+          rsync
+          rsync-ssl
+          rsync.1
+          rsync-ssl.1
+          rsyncd.conf.5
+
+  cygwin-build:
+    runs-on: windows-latest
+    if: (github.event_name == 'schedule' || contains(github.event.head_commit.message, '[buildall]'))
+    steps:
+    - uses: actions/checkout@v2
+    - uses: crazy-max/ghaction-chocolatey@v1.2.2
+      with:
+        args: install -y --no-progress cygwin cyg-get
+    - name: prep
+      run: |
+        cyg-get make autoconf automake gcc-core attr libattr-devel python3 python36-commonmark libzstd-devel liblz4-devel libssl-devel
+        echo "::add-path::C:/tools/cygwin/bin"
+    - name: configure
+      run: bash -c './configure --disable-xxhash'
+    - name: make
+      run: bash -c 'make'
+    - name: install
+      run: bash -c 'make install'
+    - name: info
+      run: bash -c '/usr/local/bin/rsync --version'
+    - name: check
+      run: bash -c 'make check'
+    - name: ssl file list
+      run: bash -c 'PATH="/usr/local/bin:$PATH" rsync-ssl --no-motd download.samba.org::rsyncftp/ || true'
+    - name: save artifact
+      uses: actions/upload-artifact@v2
+      with:
+        name: cygwin-bin
+        path: |
+          rsync.exe
+          rsync-ssl
+          rsync.1
+          rsync-ssl.1
+          rsyncd.conf.5
