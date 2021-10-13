@@ -1,17 +1,13 @@
 # build transporter
-FROM golang as builder
+FROM golang as builder-transporter
 
 COPY transporter /projects/transporter
 WORKDIR /projects/transporter
 RUN make build
 
 
-# final image
-FROM debian:stable-slim
-
-COPY --from=builder /projects/transporter/cmd/transporter /usr/local/bin/
-
 # build rsync
+FROM debian:stable-slim as builder-rsync
 RUN apt-get update && \
     apt-get install -y make && \
     apt-get install -y gcc g++ gawk autoconf automake && \
@@ -27,10 +23,21 @@ WORKDIR /projects/rsync
 RUN ./configure --disable-md2man && \
     make
 
-RUN mv rsync /usr/local/bin/
-RUN /usr/local/bin/rsync --version
+
+# final image
+FROM debian:stable-slim
+
+COPY --from=builder-transporter /projects/transporter/cmd/transporter /usr/local/bin/
+COPY --from=builder-rsync /projects/rsync/rsync /usr/local/bin/
+
+RUN apt-get update && \
+    apt-get install -y libacl1 acl libattr1 attr libxxhash0 libzstd1 liblz4-1 libssl1.1
 
 # clean
 RUN apt-get clean autoclean && \
-    apt-get autoremove -y && \
-    rm -rf /projects/*
+    apt-get autoremove -y
+
+# verify
+RUN /usr/local/bin/transporter --help
+RUN ldd /usr/local/bin/rsync
+RUN /usr/local/bin/rsync --version
