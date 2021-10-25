@@ -17,7 +17,7 @@ const (
 	errNoFileOrDirStr   = "no such file or directory"
 	ErrPathNotDir       = "path is not directory"
 	permDir             = 0775
-	rsyncBinPath        = "/usr/bin/rsync"
+	rsyncBinPath        = "/usr/local/bin/rsync"
 	rsyncOptionBasic    = "-rlptgo"
 	rsyncOptionProgress = "--progress"
 	rsyncOptionPartial  = "--partial"
