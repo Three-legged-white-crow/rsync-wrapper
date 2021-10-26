@@ -15,7 +15,10 @@ import (
 const (
 	errNonNumeric            = "ascii char is non-numeric"
 	progressBufSize          = 32
+
+	// progressLine format: #xfr99
 	progressLineFirstChar    = '#'
+	progressNumStartIndex    = 4
 	progressReporterInterval = 5
 )
 
@@ -64,7 +67,7 @@ func readStdout(ctx context.Context, reader io.Reader, progressNum *uint32) {
 			continue
 		}
 
-		num, err = atoi(l)
+		num, err = atoi(l[progressNumStartIndex:])
 		if err != nil {
 			continue
 		}

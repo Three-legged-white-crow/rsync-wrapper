@@ -4,6 +4,7 @@ import (
 	"flag"
 	"log"
 	"os"
+	"time"
 
 	flag2 "transporter/internal/flag"
 	"transporter/pkg/client"
@@ -80,7 +81,13 @@ func main() {
 
 	rc := client.NewReportClient()
 
+	startTime := time.Now().String()
+	log.Println("Start at:", startTime)
+
 	exitCode := rsync_wrapper.Run(*srcPath, *destPath, *addrReport, *isReportProgress, *isReportStderr, rc)
+
+	endTime := time.Now().String()
+	log.Println("End at:", endTime)
 
 	os.Exit(exitCode)
 
