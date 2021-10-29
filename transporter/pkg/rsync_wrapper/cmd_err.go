@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"log"
 	"strings"
 
 	"transporter/pkg/client"
@@ -18,13 +19,19 @@ func readStderr(ctx context.Context, reader io.Reader, processStdErrChan chan<- 
 		err              error
 	)
 
+	defer func() {
+		processStdErrChan <- cmdStdErrContent.String()
+		close(processStdErrChan)
+	}()
+
 	r := bufio.NewReader(reader)
 
+	log.Println("!![Info]already create stderr reader, start loop..")
 	for {
 		select {
 		case <-ctx.Done():
-			processStdErrChan <- cmdStdErrContent.String()
-			close(processStdErrChan)
+			log.Println("!![Info]get notify of stderr cancel func")
+			return
 
 		default:
 
@@ -32,11 +39,8 @@ func readStderr(ctx context.Context, reader io.Reader, processStdErrChan chan<- 
 
 		l, err = r.ReadString('\n')
 		if err != nil {
-			if err == io.EOF {
-				break
-			}
-
-			continue
+			log.Println("!![Warning]get err when read stderr content, direct break, err:", err.Error())
+			break
 		}
 
 		cmdStdErrContent.WriteString(l)

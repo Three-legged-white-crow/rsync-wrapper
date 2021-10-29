@@ -47,6 +47,11 @@ func main() {
 		"",
 		"addr for report progress info or error message")
 
+	intervalReport := flag.Int(
+		"report-interval",
+		0,
+		"interval for report progress info, time unit is second, must positive integer")
+
 	flag.Parse()
 
 	isSrcAndDestAvailable := flag2.CheckSrcAndDest(*srcPath, *destPath)
@@ -84,11 +89,13 @@ func main() {
 	startTime := time.Now().String()
 	log.Println("Start at:", startTime)
 
-	exitCode := rsync_wrapper.Run(*srcPath, *destPath, *addrReport, *isReportProgress, *isReportStderr, rc)
+	exitCode := rsync_wrapper.Run(*srcPath, *destPath, *addrReport, *isReportProgress, *isReportStderr, rc, *intervalReport)
 
 	endTime := time.Now().String()
 	log.Println("End at:", endTime)
 
+	// sleep a moment for wait all goroutine exit
+	time.Sleep(5 * time.Second)
 	os.Exit(exitCode)
 
 }

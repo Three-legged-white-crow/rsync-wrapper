@@ -32,7 +32,7 @@ type reqResult struct {
 }
 
 // Run run rsync command and if err return by rsync is recoverable will auto retry.
-func Run(src, dest, addr string, isReportProgress, isReportStderr bool, rc *client.ReportClient) int {
+func Run(src, dest, addr string, isReportProgress, isReportStderr bool, rc *client.ReportClient, reportInterval int) int {
 	var (
 		res             resultRsync
 		currentRetryNum = 0
@@ -48,7 +48,7 @@ func Run(src, dest, addr string, isReportProgress, isReportStderr bool, rc *clie
 			return exit_code.ErrMaxLimitRetry
 		}
 
-		res = runRsync(src, dest, addr, isReportProgress, isReportStderr, rc)
+		res = runRsync(src, dest, addr, isReportProgress, isReportStderr, rc, reportInterval)
 		if res.exitCode == errOK {
 			log.Println(exit_code.ErrMsgSucceed)
 			log.Println("[Complete]exit code:", res.exitCode, "exit reason:", res.exitReason)
@@ -66,8 +66,8 @@ func Run(src, dest, addr string, isReportProgress, isReportStderr bool, rc *clie
 
 		// last exec, get a recoverable error, retry command
 		currentRetryNum += 1
-		log.Println("[retry]process count:", currentRetryNum)
-		log.Println("[retry]process exit code:", res.exitCode, "exit reason:", res.exitReason, "stderr:", res.stdErr)
+		log.Println("[Retry]process count:", currentRetryNum)
+		log.Println("[Retry]process exit code:", res.exitCode, "exit reason:", res.exitReason, "stderr:", res.stdErr)
 	}
 }
 
@@ -78,7 +78,7 @@ type resultRsync struct {
 }
 
 // runRsync run rsync command and get stdout and stderr.
-func runRsync(src, dest, addr string, isReportProgress, isReportStderr bool, rc *client.ReportClient) resultRsync {
+func runRsync(src, dest, addr string, isReportProgress, isReportStderr bool, rc *client.ReportClient, reportInterval int) resultRsync {
 	var res = resultRsync{
 		exitCode:   errOK,
 		exitReason: errOKMsg,
@@ -86,10 +86,10 @@ func runRsync(src, dest, addr string, isReportProgress, isReportStderr bool, rc 
 	}
 
 	var c *exec.Cmd
-	ctx, cancelFunc := context.WithCancel(context.Background())
-	defer cancelFunc()
 
 	if isReportProgress {
+		log.Println("!![Info]read stdout of cmd turn on")
+
 		c = exec.Command(
 			rsyncBinPath,
 			rsyncOptionBasic,
@@ -105,9 +105,12 @@ func runRsync(src, dest, addr string, isReportProgress, isReportStderr bool, rc 
 			return res
 		}
 
+		ctx, cancelProgressFunc := context.WithCancel(context.Background())
+		defer cancelProgressFunc()
+
 		var progressNum uint32
 		go readStdout(ctx, stdoutPipe, &progressNum)
-		go reportProgress(ctx, &progressNum, addr, rc)
+		go reportProgress(ctx, &progressNum, addr, rc, reportInterval)
 
 	} else {
 		c = exec.Command(
@@ -118,7 +121,11 @@ func runRsync(src, dest, addr string, isReportProgress, isReportStderr bool, rc 
 			dest)
 	}
 
+	log.Println("!![Info]cmd string:", c.String())
+
 	if isReportStderr {
+		log.Println("!![Info]read stderr of cmd turn on")
+
 		stderrPipe, err := c.StderrPipe()
 		if err != nil {
 			res.exitCode = errCreatePipe
@@ -127,11 +134,16 @@ func runRsync(src, dest, addr string, isReportProgress, isReportStderr bool, rc 
 		}
 
 		// collect stderr content of specified process
-		processStdErrChan := make(chan string)
+		processStdErrChan := make(chan string, 1)
 		defer func(c <-chan string) {
 			stdErrInfo := <-c
 			res.stdErr = stdErrInfo
+			log.Println("!![Info]succeed to get stderrinfo from stderr reader")
 		}(processStdErrChan)
+
+		ctx, cancelStderrFunc := context.WithCancel(context.Background())
+		defer cancelStderrFunc()
+
 
 		go readStderr(ctx, stderrPipe, processStdErrChan)
 	}
@@ -140,32 +152,32 @@ func runRsync(src, dest, addr string, isReportProgress, isReportStderr bool, rc 
 	if errStart != nil {
 		res.exitCode = errStartCmd
 		res.exitReason = errStart.Error()
-		cancelFunc()
 		return res
 	}
+
+	log.Println("!![Info]succeed to start command")
 
 	errWait := c.Wait()
 	if errWait != nil {
+		log.Println("!![Warning]get wait cmd err:", errWait.Error())
+
 		if isWaitProcessErr(errWait) {
 			res.exitCode = errWaitProcess
 			res.exitReason = errWait.Error()
-			cancelFunc()
 			return res
 		}
 
-		processExitErr, ok := errStart.(*exec.ExitError)
+		processExitErr, ok := errWait.(*exec.ExitError)
 		if ok {
 			res.exitCode = processExitErr.ExitCode()
 			res.exitReason = errWait.Error()
-			cancelFunc()
 			return res
 		}
 
-		cancelFunc()
+		log.Println("!![Warning]get wait err, but err is not exiterr:", errWait.Error())
 		return res
 	}
 
-	cancelFunc()
 	return res
 }
 
