@@ -64,10 +64,17 @@
 
 
 
+- `report-interval`
+
+  - int
+  - 上报进度的间隔，单位为秒，如果指定间隔为非正整数，则使用默认间隔 5 秒
+  - 默认为0
+
+
 #### examples
 
-- 只上报拷贝进度信息
-  - `/usr/local/transporter -dest-dir -progress -report-addr http://api/report -src /src -dest /dest`
+- 只上报拷贝进度信息，每10秒上报一次
+  - `/usr/local/transporter -dest-dir -progress -report-interval 10 -report-addr http://api/report -src /src -dest /dest`
 - 只上报程序错误信息
   - `/usr/local/transporter -dest-dir -stderr -report-addr http://api/report -src /src -dest /dest`
 - 不上报任何信息
