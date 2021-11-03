@@ -24,7 +24,7 @@ const (
 	errCrashed     = 15  // sibling process crashed
 	errTerminated  = 16  // sibling process terminated abnormally
 	errSignal1     = 19  // received SIGUSR1
-	errSignal      = 20  // received SIGINT, SIGTERM, or SIGHUP
+	errSignal      = 20  // received SIGINT, SIGTERM, or SIGHUP. SIGKILL will handle as unrecoverable err
 	errWaitChild   = 21  // some error returned by waitpid()
 	errMalloc      = 22  // error allocating core memory buffers
 	errPartial     = 23  // partial transfer, some files/attrs were not transferred (see previous errors
@@ -71,13 +71,21 @@ var (
 		errWaitProcess,
 	}
 
-	// if get unRecoverable err of rsync, rsync wrapper will exit direct
+	// if get unRecoverable err of rsync, rsync wrapper will exit direct,
+	// also includes other errors that are unrecoverable and will cause the process to terminate.
 	unRecoverableErrList = [5]int{
 		errSyntax,
 		errProtocol,
 		errFileselect,
 		errUnsupported,
 		errStartclient,
+
+		// other errors like:
+		// errSIGKILL
+		// errSIGBUS
+		// errSIGSEGV
+		// ......
+
 	}
 )
 
