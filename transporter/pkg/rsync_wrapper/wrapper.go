@@ -25,10 +25,11 @@ const (
 
 // reqResult is result of rsync cmd to report.
 type reqResult struct {
-	Count   int64  `json:"count"`   // progress number
-	Message string `json:"message"` // rsync stderr content
-	ErrCode int64  `json:"errcode"` // exit code
-	Reason  string `json:"reason"`  // reason of exit error
+	CurrentCount int64  `json:"current_count"` // currnet transfer file progress number
+	TotalCount   int64  `json:"total_count"`   // total check file progress number
+	Message      string `json:"message"`       // rsync stderr content
+	ErrCode      int64  `json:"errcode"`       // exit code
+	Reason       string `json:"reason"`        // reason of exit error
 }
 
 // Run run rsync command and if err return by rsync is recoverable will auto retry.
@@ -108,9 +109,9 @@ func runRsync(src, dest, addr string, isReportProgress, isReportStderr bool, rc 
 		ctx, cancelProgressFunc := context.WithCancel(context.Background())
 		defer cancelProgressFunc()
 
-		var progressNum uint32
-		go readStdout(ctx, stdoutPipe, &progressNum)
-		go reportProgress(ctx, &progressNum, addr, rc, reportInterval)
+		var curProgressNum, totalProgressNum uint32
+		go readStdout(ctx, stdoutPipe, &curProgressNum, &totalProgressNum)
+		go reportProgress(ctx, &curProgressNum, &totalProgressNum, addr, rc, reportInterval)
 
 	} else {
 		c = exec.Command(

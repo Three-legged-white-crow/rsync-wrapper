@@ -2,6 +2,7 @@ package rsync_wrapper
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -17,16 +18,14 @@ const (
 	errNonNumeric                   = "ascii char is non-numeric"
 	progressBufSize                 = 32
 
-	// progressLine format: #xfr99
-	progressLineFirstChar           = '#'
-	progressNumStartIndex           = 4
+	// progressLine format: 99-200
+	splitSymbol                     = '-'
 	progressReporterIntervalDefault = 5
 )
 
 // readStdout read content of stdout with pipe, parsed progress.
-func readStdout(ctx context.Context, reader io.Reader, progressNum *uint32) {
+func readStdout(ctx context.Context, reader io.Reader, curProgressNum, totalProgressNum *uint32) {
 	var (
-		num      uint32
 		l        []byte
 		isPrefix bool
 		err      error
@@ -65,20 +64,31 @@ func readStdout(ctx context.Context, reader io.Reader, progressNum *uint32) {
 			continue
 		}
 
-		// not progress line
-		if l[0] != progressLineFirstChar {
-			log.Println("!![Warning]first char is not #")
-			continue
-		}
-
-		num, err = atoi(l[progressNumStartIndex:])
-		if err != nil {
-			log.Println("!![Warning]progress num is unavailable")
-			continue
-		}
-
-		atomic.StoreUint32(progressNum, num)
+		progressParse(l, curProgressNum, totalProgressNum)
 	}
+}
+
+func progressParse(progressInfo []byte, curProgressNum, totalProgressNum *uint32) {
+	splitIndex := bytes.IndexByte(progressInfo, splitSymbol)
+	curFileNum, err := atoi(progressInfo[:splitIndex])
+	if err != nil {
+		log.Println("!![Warning]current progress num is unavailable")
+		return
+	}
+
+	if splitIndex + 1 == len(progressInfo) {
+		log.Println("!![Warning]no total progress num")
+		return
+	}
+
+	totalFileNum, err := atoi(progressInfo[splitIndex+1:])
+	if err != nil {
+		log.Println("!![Warning]total progress num is unavailable")
+		return
+	}
+
+	atomic.StoreUint32(curProgressNum, curFileNum)
+	atomic.StoreUint32(totalProgressNum, totalFileNum)
 }
 
 // atoi convert bytes of number string format to type uint32.
@@ -106,7 +116,7 @@ func atoi(strb []byte) (uint32, error) {
 	return n, nil
 }
 
-func reportProgress(ctx context.Context, progressNum *uint32, addr string, rc *client.ReportClient, reportInterval int) {
+func reportProgress(ctx context.Context, curProgressNum, totalProgressNum *uint32, addr string, rc *client.ReportClient, reportInterval int) {
 	var progressReporterInterval int
 	if reportInterval <= 0 {
 		progressReporterInterval = progressReporterIntervalDefault
@@ -116,8 +126,9 @@ func reportProgress(ctx context.Context, progressNum *uint32, addr string, rc *c
 	t := time.NewTicker(time.Duration(progressReporterInterval) * time.Second)
 
 	var (
-		currentProgressNum uint32
-		reqContent         reqResult
+		currentFileNum uint32
+		totalFileNum   uint32
+		reqContent     reqResult
 	)
 
 	log.Println("!![Info]ready to report progress, start loop..")
@@ -130,9 +141,11 @@ func reportProgress(ctx context.Context, progressNum *uint32, addr string, rc *c
 			return
 
 		case <-t.C:
-			currentProgressNum = atomic.LoadUint32(progressNum)
+			currentFileNum = atomic.LoadUint32(curProgressNum)
+			totalFileNum = atomic.LoadUint32(totalProgressNum)
 
-			reqContent.Count = int64(currentProgressNum)
+			reqContent.CurrentCount = int64(currentFileNum)
+			reqContent.TotalCount = int64(totalFileNum)
 			reqContentB, err := json.Marshal(&reqContent)
 			if err != nil {
 				log.Println("!![Warning] failed to marshal reqcontent of progress, err:", err.Error())

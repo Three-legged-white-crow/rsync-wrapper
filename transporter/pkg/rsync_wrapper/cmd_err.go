@@ -49,7 +49,6 @@ func readStderr(ctx context.Context, reader io.Reader, processStdErrChan chan<- 
 
 func reportStderr(exitCode int, exitReason, stdErr, addr string, rc *client.ReportClient) error {
 	reqContent := reqResult{
-		Count:   0,
 		Message: stdErr,
 		ErrCode: int64(exitCode),
 		Reason:  exitReason,

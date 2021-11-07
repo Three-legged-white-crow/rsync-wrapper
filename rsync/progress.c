@@ -72,7 +72,7 @@ static void rprint_progress_custom(int is_last) {
 	// at last transferred of file, output progress
 	char eol[128];
 
-	int len = snprintf(eol, sizeof eol, "#xfr%d\n", stats.xferred_files);
+	int len = snprintf(eol, sizeof eol, "%d-%d\n", stats.xferred_files, stats.num_files);
 	if (INFO_GTE(PROGRESS, 2)) {
 		static int last_len = 0;
 		/* Drop \n and pad with spaces if line got shorter. */

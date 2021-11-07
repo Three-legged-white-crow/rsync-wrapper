@@ -19,10 +19,11 @@ func main() {
 }
 
 type reqResult struct {
-	Count   int64  `json:"count"`   // progress number
-	Message string `json:"message"` // rsync stderr content
-	ErrCode int64  `json:"errcode"` // exit code
-	Reason  string `json:"reason"`  // reason of exit error
+	CurrentCount int64  `json:"current_count"` // currnet transfer file progress number
+	TotalCount   int64  `json:"total_count"`   // total check file progress number
+	Message      string `json:"message"`       // rsync stderr content
+	ErrCode      int64  `json:"errcode"`       // exit code
+	Reason       string `json:"reason"`        // reason of exit error
 }
 
 func reporter(w http.ResponseWriter, r *http.Request) {
@@ -39,8 +40,8 @@ func reporter(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if reqContent.Count > 0 {
-		log.Println("progress num:", reqContent.Count)
+	if reqContent.CurrentCount > 0 && reqContent.TotalCount > 0 {
+		log.Println("progress current num:", reqContent.CurrentCount, "total num:", reqContent.TotalCount)
 	}
 
 	if len(reqContent.Message) > 0 {
