@@ -1,6 +1,7 @@
 # build transporter
 FROM golang as builder-transporter
 
+ENV GOPROXY="https://goproxy.cn"
 COPY transporter /projects/transporter
 WORKDIR /projects/transporter
 RUN make build

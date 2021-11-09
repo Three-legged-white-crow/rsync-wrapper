@@ -21,6 +21,9 @@ const (
 	// ErrUnrecoverable means rsync return a unrecoverable error.
 	ErrUnrecoverable
 
+	// ErrCheckMount means occur a error when get info of mounted filesystem.
+	ErrCheckMount
+
 	ErrMsgSucceed         = "process succeed complete with exit code 0"
 	ErrMsgSrcOrDest       = "src path or dest path is empty or not absolute path"
 	ErrMsgFlagMissPartner = "missing required partner flag('progress' or 'stderr' miss partner 'report-addr')"
@@ -28,4 +31,5 @@ const (
 	ErrMsgCreateDestDir   = "occur a error when check or create dest directory"
 	ErrMsgMaxLimitRetry   = "retry limit has been reached, but still get an error(can be recovered)"
 	ErrMsgUnrecoverable   = "return a unrecoverable error"
+	ErrMsgCheckMount      = "occur a error when check src or dest is mounted"
 )

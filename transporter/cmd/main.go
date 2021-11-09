@@ -4,13 +4,17 @@ import (
 	"flag"
 	"log"
 	"os"
+	"strings"
 	"time"
 
+	"transporter/internal/filesystem"
 	flag2 "transporter/internal/flag"
 	"transporter/pkg/client"
 	"transporter/pkg/exit_code"
 	"transporter/pkg/rsync_wrapper"
 )
+
+const slash = "/"
 
 func main() {
 
@@ -82,6 +86,19 @@ func main() {
 			log.Println("dest path:", *destPath, "err:", err.Error())
 			os.Exit(exit_code.ErrCreateDestDir)
 		}
+	}
+
+	var destPathCheck string
+	destPathLastSlashIndex := strings.LastIndex(*destPath, slash)
+	if destPathLastSlashIndex == 0 {
+		destPathCheck = slash
+	}else {
+		destPathCheck = (*destPath)[:destPathLastSlashIndex]
+	}
+	errCheckMount := filesystem.IsMountPathList(*srcPath, destPathCheck)
+	if errCheckMount != nil {
+		log.Println(exit_code.ErrMsgCheckMount, ",err:", errCheckMount.Error())
+		os.Exit(exit_code.ErrCheckMount)
 	}
 
 	rc := client.NewReportClient()
