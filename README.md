@@ -106,6 +106,9 @@ const (
 	// ErrUnrecoverable means rsync return a unrecoverable error.
 	ErrUnrecoverable     // 6
 
+    // ErrCheckMount means occur a error when get info of mounted filesystem.
+    ErrCheckMount        // 7
+
 	ErrMsgSucceed         = "process succeed complete with exit code 0"
 	ErrMsgSrcOrDest       = "src path or dest path is empty or not absolute path"
 	ErrMsgFlagMissPartner = "missing required partner flag('progress' or 'stderr' miss partner 'report-addr')"
@@ -113,6 +116,7 @@ const (
 	ErrMsgCreateDestDir   = "occur a error when check or create dest directory"
 	ErrMsgMaxLimitRetry   = "retry limit has been reached, but still get an error(can be recovered)"
 	ErrMsgUnrecoverable   = "return a unrecoverable error"
+    ErrMsgCheckMount      = "occur a error when check src or dest is mounted"
 )
 ```
 
@@ -121,12 +125,13 @@ const (
 #### 上报数据结构
 
 ```go
- type reqResult struct {
-    Count   int64  `json:"count"`   // progress number
-    Message string `json:"message"` // rsync stderr content
-    ErrCode int64  `json:"errcode"` // exit code
-    Reason  string `json:"reason"`  // reason of exit error
- }
+type reqResult struct {
+CurrentCount int64  `json:"current_count"` // currnet transfer file progress number
+TotalCount   int64  `json:"total_count"`   // total check file progress number
+Message      string `json:"message"`       // rsync stderr content
+ErrCode      int64  `json:"errcode"`       // exit code
+Reason       string `json:"reason"`        // reason of exit error
+}
 
 ```
 
