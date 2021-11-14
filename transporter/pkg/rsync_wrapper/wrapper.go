@@ -42,30 +42,39 @@ func Run(src, dest, addr string, isReportProgress, isReportStderr bool, rc *clie
 	for {
 
 		if currentRetryNum == retryMaxLimit {
+			curExitCode := exitCodeConvert(res.exitCode)
 			if isReportStderr {
-				_ = reportStderr(res.exitCode, res.exitReason, res.stdErr, addr, rc)
+				_ = reportStderr(curExitCode, res.exitReason, res.stdErr, addr, rc)
 			}
 			log.Println(exit_code.ErrMsgMaxLimitRetry)
-			return exit_code.ErrMaxLimitRetry
+			log.Println("[Retry Limit]Use latest process exit code:", res.exitCode, "latest retry count:", retryMaxLimit)
+			return curExitCode
 		}
 
 		res = runRsync(src, dest, addr, isReportProgress, isReportStderr, rc, reportInterval)
 		if res.exitCode == errOK {
 			log.Println(exit_code.ErrMsgSucceed)
-			log.Println("[Complete]exit code:", res.exitCode, "exit reason:", res.exitReason)
+			log.Println("[Complete]process exit code:", res.exitCode, "exit reason:", res.exitReason)
 			return exit_code.Succeed
 		}
 
 		if isErrUnRecoverable(res.exitCode) {
+			curExitCode := exitCodeConvert(res.exitCode)
 			if isReportStderr {
-				_ = reportStderr(res.exitCode, res.exitReason, res.stdErr, addr, rc)
+				_ = reportStderr(curExitCode, res.exitReason, res.stdErr, addr, rc)
 			}
 			log.Println(exit_code.ErrMsgUnrecoverable)
-			log.Println("[Unrecoverable Err]exit code:", res.exitCode, "exit reason:", res.exitReason, "stderr:", res.stdErr)
-			return exit_code.ErrUnrecoverable
+			log.Println("[Unrecoverable Err]process exit code:", res.exitCode, "exit reason:", res.exitReason, "stderr:", res.stdErr)
+			return curExitCode
 		}
 
-		// last exec, get a recoverable error, retry command
+		// last exec, get a recoverable error, retry command.
+		// if rsync exited because file vanished, not count retry num.
+		if res.exitCode == errVanished {
+			log.Println("!![Warning]File(s) vanished on sender side")
+			continue
+		}
+
 		currentRetryNum += 1
 		log.Println("[Retry]process count:", currentRetryNum)
 		log.Println("[Retry]process exit code:", res.exitCode, "exit reason:", res.exitReason, "stderr:", res.stdErr)
@@ -144,7 +153,6 @@ func runRsync(src, dest, addr string, isReportProgress, isReportStderr bool, rc 
 
 		ctx, cancelStderrFunc := context.WithCancel(context.Background())
 		defer cancelStderrFunc()
-
 
 		go readStderr(ctx, stderrPipe, processStdErrChan)
 	}

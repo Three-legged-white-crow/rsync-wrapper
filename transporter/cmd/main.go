@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"log"
 	"os"
@@ -14,7 +15,10 @@ import (
 	"transporter/pkg/rsync_wrapper"
 )
 
-const slash = "/"
+const (
+	slash            = "/"
+	timeoutCreateDir = 120 // use second
+)
 
 func main() {
 
@@ -60,31 +64,62 @@ func main() {
 
 	isSrcAndDestAvailable := flag2.CheckSrcAndDest(*srcPath, *destPath)
 	if !isSrcAndDestAvailable {
-		os.Exit(exit_code.ErrSrcOrDest)
+		os.Exit(exit_code.ErrInvalidArgument)
 	}
+	log.Println("!![Info]Succeed to check src and dest")
 
 	// Both 'progress' and 'report-addr' must be specified
 	isBothProgressFlag := flag2.CheckProgressFlag(*isReportProgress, *addrReport)
 	if !isBothProgressFlag {
-		os.Exit(exit_code.ErrFlagMissPartner)
+		os.Exit(exit_code.ErrInvalidArgument)
 	}
+	log.Println("!![Info]Succeed to check progress flag group")
 
 	isBothStderrFlag := flag2.CheckStderrFlag(*isReportStderr, *addrReport)
 	if !isBothStderrFlag {
-		os.Exit(exit_code.ErrFlagMissPartner)
+		os.Exit(exit_code.ErrInvalidArgument)
 	}
+	log.Println("!![Info]Succeed to check stderr flag group")
 
 	isAddrReportAvailable := client.CheckAddr(*addrReport)
 	if !isAddrReportAvailable {
-		os.Exit(exit_code.ErrReportAddr)
+		os.Exit(exit_code.ErrInvalidArgument)
 	}
+	log.Println("!![Info]Succeed to check report address")
 
 	if *isSetDestDir {
-		err := rsync_wrapper.CheckOrCreateDir(*destPath)
-		if err != nil {
-			log.Println(exit_code.ErrMsgCreateDestDir)
-			log.Println("dest path:", *destPath, "err:", err.Error())
-			os.Exit(exit_code.ErrCreateDestDir)
+
+		ctx, cancelfunc := context.WithTimeout(context.Background(), timeoutCreateDir*time.Second)
+		resChan := make(chan error, 1)
+		go checkDestDir(*destPath, resChan)
+
+		var (
+			isCheck bool = false
+			err     error
+		)
+		for {
+
+			if isCheck {
+				break
+			}
+
+			select {
+			case <-ctx.Done():
+				log.Println("!![Error]Timeout to check or create dest dir")
+				// call cancelfunc is nouseful, because create dir is blocked, but also call
+				cancelfunc()
+				os.Exit(exit_code.ErrSystem)
+
+			case err = <-resChan:
+				if err != nil {
+					log.Println("!![Error]Failed to check or create dest dir, err:", err.Error())
+					os.Exit(exit_code.ErrSystem)
+				}
+
+				log.Println("!![Info]Succeed to check or create dest dir")
+				isCheck = true
+
+			}
 		}
 	}
 
@@ -92,27 +127,33 @@ func main() {
 	destPathLastSlashIndex := strings.LastIndex(*destPath, slash)
 	if destPathLastSlashIndex == 0 {
 		destPathCheck = slash
-	}else {
+	} else {
 		destPathCheck = (*destPath)[:destPathLastSlashIndex]
 	}
 	errCheckMount := filesystem.IsMountPathList(*srcPath, destPathCheck)
 	if errCheckMount != nil {
 		log.Println(exit_code.ErrMsgCheckMount, ",err:", errCheckMount.Error())
-		os.Exit(exit_code.ErrCheckMount)
+		os.Exit(exit_code.ErrSystem)
 	}
 
 	rc := client.NewReportClient()
 
 	startTime := time.Now().String()
-	log.Println("Start at:", startTime)
+	log.Println("!![Info]Start at:", startTime)
 
 	exitCode := rsync_wrapper.Run(*srcPath, *destPath, *addrReport, *isReportProgress, *isReportStderr, rc, *intervalReport)
 
 	endTime := time.Now().String()
-	log.Println("End at:", endTime)
+	log.Println("!![Info]End at:", endTime)
 
 	// sleep a moment for wait all goroutine exit
 	time.Sleep(5 * time.Second)
 	os.Exit(exitCode)
 
+}
+
+func checkDestDir(destPath string, resChan chan<- error) {
+	err := rsync_wrapper.CheckOrCreateDir(destPath)
+	resChan <- err
+	close(resChan)
 }

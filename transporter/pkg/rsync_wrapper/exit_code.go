@@ -4,6 +4,8 @@ import (
 	"errors"
 	"os"
 	"syscall"
+
+	"transporter/pkg/exit_code"
 )
 
 const (
@@ -87,6 +89,37 @@ var (
 		// ......
 
 	}
+
+	exitCodeMap = map[int]int{
+		errOK:          exit_code.Succeed,
+		errSyntax:      exit_code.ErrInvalidArgument,
+		errProtocol:    exit_code.ErrSystem,
+		errFileselect:  exit_code.ErrNoSuchFileOrDir,
+		errUnsupported: exit_code.ErrInvalidArgument,
+		errStartclient: exit_code.ErrSystem,
+		errSocketio:    exit_code.ErrIOError,
+		errFileio:      exit_code.ErrIOError,
+		errStreamio:    exit_code.ErrIOError,
+		errMessageio:   exit_code.ErrIOError,
+		errIPC:         exit_code.ErrSystem,
+		errCrashed:     exit_code.ErrSystem,
+		errTerminated:  exit_code.ErrSystem,
+		errSignal1:     exit_code.ErrSystem,
+		errSignal:      exit_code.ErrSystem,
+		errWaitChild:   exit_code.ErrSystem,
+		errMalloc:      exit_code.ErrSystem,
+		errPartial:     exit_code.ErrPermissionDenied,
+		errDelLimit:    exit_code.ErrSystem,
+		errTimeout:     exit_code.ErrSystem,
+		errConTimeout:  exit_code.ErrSystem,
+		errCmdFailed:   exit_code.ErrSystem,
+		errCmdKilled:   exit_code.ErrSystem,
+		errCmdRun:      exit_code.ErrSystem,
+		errCmdNotfound: exit_code.ErrSystem,
+		errCreatePipe:  exit_code.ErrSystem,
+		errStartCmd:    exit_code.ErrSystem,
+		errWaitProcess: exit_code.ErrSystem,
+	}
 )
 
 // isErrRecoverable return true if err is recoverable.
@@ -119,4 +152,13 @@ func isWaitProcessErr(err error) bool {
 
 	_, ok := err.(*os.SyscallError)
 	return ok
+}
+
+func exitCodeConvert(errCode int) int {
+	exitCode, ok := exitCodeMap[errCode]
+	if !ok {
+		return exit_code.ErrSystem
+	}
+
+	return exitCode
 }

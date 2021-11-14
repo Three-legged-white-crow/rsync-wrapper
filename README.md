@@ -83,40 +83,25 @@
 #### exit code
 
 ```go
-package exit_code
-
 const (
-	Succeed = iota       // 0
-
-	// ErrSrcOrDest means src path or dest path is empty or not absolute path.
-	ErrSrcOrDest         // 1
-
-	// ErrFlagMissPartner means missing required partner flag('-progress' and '-report-progress-addr' is a pair flags).
-	ErrFlagMissPartner   // 2
-
-	// ErrReportAddr means report addr is unavailable.
-	ErrReportAddr        // 3
-
-	// ErrCreateDestDir means occur a error when create dest directory.
-	ErrCreateDestDir     // 4
-
-	// ErrMaxLimitRetry means retry limit has been reached, but the Rsync still gives an error(can be recovered).
-	ErrMaxLimitRetry     // 5
-
-	// ErrUnrecoverable means rsync return a unrecoverable error.
-	ErrUnrecoverable     // 6
-
-    // ErrCheckMount means occur a error when get info of mounted filesystem.
-    ErrCheckMount        // 7
-
-	ErrMsgSucceed         = "process succeed complete with exit code 0"
-	ErrMsgSrcOrDest       = "src path or dest path is empty or not absolute path"
-	ErrMsgFlagMissPartner = "missing required partner flag('progress' or 'stderr' miss partner 'report-addr')"
-	ErrMsgReportAddr      = "report addr is unavailable"
-	ErrMsgCreateDestDir   = "occur a error when check or create dest directory"
-	ErrMsgMaxLimitRetry   = "retry limit has been reached, but still get an error(can be recovered)"
-	ErrMsgUnrecoverable   = "return a unrecoverable error"
-    ErrMsgCheckMount      = "occur a error when check src or dest is mounted"
+    Succeed                 = 0
+    ErrNoSuchFileOrDir      = 2
+    ErrIOError              = 5
+    ErrPermissionDenied     = 13
+    ErrDeviceIsBusy         = 16
+    ErrInvalidArgument      = 22
+    ErrNoSpaceLeftOnDevice  = 28
+    ErrFileSystemIsReadOnly = 30
+    ErrFileNameTooLong      = 36
+    ErrSystem               = 255
+    
+    ErrMsgSucceed           = "process succeed complete with exit code 0"
+    ErrMsgSrcOrDest         = "src path or dest path is empty or not absolute path"
+    ErrMsgFlagMissPartner   = "missing required partner flag('progress' or 'stderr' miss partner 'report-addr')"
+    ErrMsgReportAddr        = "report addr is unavailable"
+    ErrMsgMaxLimitRetry     = "retry limit has been reached, but still get an error(can be recovered)"
+    ErrMsgUnrecoverable     = "return a unrecoverable error"
+    ErrMsgCheckMount        = "occur a error when check src or dest is mounted"
 )
 ```
 
@@ -126,11 +111,11 @@ const (
 
 ```go
 type reqResult struct {
-CurrentCount int64  `json:"current_count"` // currnet transfer file progress number
-TotalCount   int64  `json:"total_count"`   // total check file progress number
-Message      string `json:"message"`       // rsync stderr content
-ErrCode      int64  `json:"errcode"`       // exit code
-Reason       string `json:"reason"`        // reason of exit error
+    CurrentCount int64  `json:"current_count"` // currnet transfer file progress number
+    TotalCount   int64  `json:"total_count"`   // total check file progress number
+    Message      string `json:"message"`       // rsync stderr content
+    ErrCode      int64  `json:"errcode"`       // exit code
+    Reason       string `json:"reason"`        // reason of exit error
 }
 
 ```
@@ -214,6 +199,37 @@ var (
 		errUnsupported,
 		errStartclient,
 	}
+	
+	exitCodeMap = map[int]int{
+                errOK:          exit_code.Succeed,
+                errSyntax:      exit_code.ErrInvalidArgument,
+                errProtocol:    exit_code.ErrSystem,
+                errFileselect:  exit_code.ErrNoSuchFileOrDir,
+                errUnsupported: exit_code.ErrInvalidArgument,
+                errStartclient: exit_code.ErrSystem,
+                errSocketio:    exit_code.ErrIOError,
+                errFileio:      exit_code.ErrIOError,
+                errStreamio:    exit_code.ErrIOError,
+                errMessageio:   exit_code.ErrIOError,
+                errIPC:         exit_code.ErrSystem,
+                errCrashed:     exit_code.ErrSystem,
+                errTerminated:  exit_code.ErrSystem,
+                errSignal1:     exit_code.ErrSystem,
+                errSignal:      exit_code.ErrSystem,
+                errWaitChild:   exit_code.ErrSystem,
+                errMalloc:      exit_code.ErrSystem,
+                errPartial:     exit_code.ErrPermissionDenied,
+                errDelLimit:    exit_code.ErrSystem,
+                errTimeout:     exit_code.ErrSystem,
+                errConTimeout:  exit_code.ErrSystem,
+                errCmdFailed:   exit_code.ErrSystem,
+                errCmdKilled:   exit_code.ErrSystem,
+                errCmdRun:      exit_code.ErrSystem,
+                errCmdNotfound: exit_code.ErrSystem,
+                errCreatePipe:  exit_code.ErrSystem,
+                errStartCmd:    exit_code.ErrSystem,
+                errWaitProcess: exit_code.ErrSystem,
+        }
 
 )
 
