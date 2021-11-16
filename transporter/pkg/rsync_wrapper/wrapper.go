@@ -2,10 +2,7 @@ package rsync_wrapper
 
 import (
 	"context"
-	"errors"
-	"io/fs"
 	"log"
-	"os"
 	"os/exec"
 
 	"transporter/pkg/client"
@@ -14,9 +11,6 @@ import (
 
 const (
 	retryMaxLimit       = 3
-	errNoFileOrDirStr   = "no such file or directory"
-	ErrPathNotDir       = "path is not directory"
-	permDir             = 0775
 	rsyncBinPath        = "/usr/local/bin/rsync"
 	rsyncOptionBasic    = "-rlptgo"
 	rsyncOptionProgress = "--progress"
@@ -188,34 +182,4 @@ func runRsync(src, dest, addr string, isReportProgress, isReportStderr bool, rc 
 	}
 
 	return res
-}
-
-// CheckOrCreateDir check path is a dir, if not exist, create dir.
-// If path is a exist dir or create a new dir according path, return nil.
-func CheckOrCreateDir(dirPath string) error {
-	f, err := os.Open(dirPath)
-	if err != nil {
-		errStr := err.(*fs.PathError).Unwrap().Error()
-		if errStr == errNoFileOrDirStr {
-			err = os.MkdirAll(dirPath, permDir)
-			if err != nil {
-				return err
-			}
-
-			return nil
-		}
-
-		return err
-	}
-
-	fInfo, err := f.Stat()
-	if err != nil {
-		return err
-	}
-
-	if !fInfo.IsDir() {
-		return errors.New(ErrPathNotDir)
-	}
-
-	return nil
 }

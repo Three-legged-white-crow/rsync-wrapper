@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
+	"io/fs"
 	"log"
 	"os"
 	"strings"
@@ -113,6 +115,9 @@ func main() {
 			case err = <-resChan:
 				if err != nil {
 					log.Println("!![Error]Failed to check or create dest dir, err:", err.Error())
+					if errors.Is(err, fs.ErrPermission) {
+						os.Exit(exit_code.ErrPermissionDenied)
+					}
 					os.Exit(exit_code.ErrSystem)
 				}
 
@@ -133,6 +138,15 @@ func main() {
 	errCheckMount := filesystem.IsMountPathList(*srcPath, destPathCheck)
 	if errCheckMount != nil {
 		log.Println(exit_code.ErrMsgCheckMount, ",err:", errCheckMount.Error())
+
+		if errors.Is(errCheckMount, fs.ErrNotExist) {
+			os.Exit(exit_code.ErrNoSuchFileOrDir)
+		}
+
+		if errors.Is(errCheckMount, fs.ErrPermission) {
+			os.Exit(exit_code.ErrPermissionDenied)
+		}
+
 		os.Exit(exit_code.ErrSystem)
 	}
 
@@ -153,7 +167,7 @@ func main() {
 }
 
 func checkDestDir(destPath string, resChan chan<- error) {
-	err := rsync_wrapper.CheckOrCreateDir(destPath)
+	err := filesystem.CheckOrCreateDir(destPath)
 	resChan <- err
 	close(resChan)
 }
