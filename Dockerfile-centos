@@ -2,9 +2,16 @@
 FROM golang as builder-transporter
 
 ENV GOPROXY="https://goproxy.cn"
+
+# build transporter
 COPY transporter /projects/transporter
 WORKDIR /projects/transporter
 RUN make build
+
+# build checksum
+COPY checksum /projects/checksum
+WORKDIR /projects/checksum
+RUM make build
 
 
 # build rsync
@@ -31,6 +38,7 @@ RUN /projects/rsync/rsync --version
 FROM centos:centos7
 
 COPY --from=builder-transporter /projects/transporter/cmd/transporter /usr/local/bin/
+COPY --from=builder-transporter /projects/checksum/cmd/checksum /usr/local/bin/
 COPY --from=builder-rsync /projects/rsync/rsync /usr/local/bin/
 
 RUN yum -y install epel-release && \
@@ -41,5 +49,6 @@ RUN yum clean all
 
 # verify
 RUN /usr/local/bin/transporter --help
+RUN /usr/local/bin/checksum --help
 RUN ldd /usr/local/bin/rsync
 RUN /usr/local/bin/rsync --version
