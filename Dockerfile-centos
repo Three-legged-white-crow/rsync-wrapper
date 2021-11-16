@@ -11,7 +11,7 @@ RUN make build
 # build checksum
 COPY checksum /projects/checksum
 WORKDIR /projects/checksum
-RUM make build
+RUN make build
 
 
 # build rsync
