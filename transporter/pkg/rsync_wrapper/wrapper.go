@@ -12,7 +12,7 @@ import (
 const (
 	retryMaxLimit       = 3
 	rsyncBinPath        = "/usr/local/bin/rsync"
-	rsyncOptionBasic    = "-rlptgo"
+	rsyncOptionBasic    = "-rlptgoH"
 	rsyncOptionProgress = "--progress"
 	rsyncOptionPartial  = "--partial"
 )
