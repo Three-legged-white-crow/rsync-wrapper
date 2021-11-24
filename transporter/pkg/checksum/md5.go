@@ -25,8 +25,9 @@ func MD5Checksum(filePath string) ([]byte, error) {
 	h := md5.New()
 	buf := make([]byte, readBuf)
 
+	var n int
 	for {
-		n, err := f.Read(buf)
+		n, err = f.Read(buf)
 		if err == io.EOF {
 			break
 		}
@@ -53,12 +54,12 @@ func Compare(src, dest []byte) bool {
 }
 
 func MD5File(path string, res []byte) error {
-	// todo: check file is exists? if exists create a new file?
+
 	dst := make([]byte, hex.EncodedLen(len(res)))
 	l := hex.Encode(dst, res)
 	reshex := string(dst)
 
-	log.Println("[Checksum]Hexadecimal encoding checksum string:", reshex)
+	log.Println("[Checksum-Info]Hexadecimal encoding checksum string:", reshex)
 
 	f, err := os.Create(path)
 	if err != nil {

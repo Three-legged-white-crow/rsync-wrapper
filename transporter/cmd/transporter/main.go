@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"transporter/internal/filesystem"
 	flag2 "transporter/internal/flag"
 	"transporter/pkg/client"
 	"transporter/pkg/exit_code"
+	filesystem2 "transporter/pkg/filesystem"
 	"transporter/pkg/rsync_wrapper"
 )
 
@@ -110,6 +110,7 @@ func main() {
 				log.Println("!![Error]Timeout to check or create dest dir")
 				// call cancelfunc is nouseful, because create dir is blocked, but also call
 				cancelfunc()
+				close(resChan)
 				os.Exit(exit_code.ErrSystem)
 
 			case err = <-resChan:
@@ -135,7 +136,7 @@ func main() {
 	} else {
 		destPathCheck = (*destPath)[:destPathLastSlashIndex]
 	}
-	errCheckMount := filesystem.IsMountPathList(*srcPath, destPathCheck)
+	errCheckMount := filesystem2.IsMountPathList(*srcPath, destPathCheck)
 	if errCheckMount != nil {
 		log.Println(exit_code.ErrMsgCheckMount, ",err:", errCheckMount.Error())
 
@@ -167,7 +168,11 @@ func main() {
 }
 
 func checkDestDir(destPath string, resChan chan<- error) {
-	err := filesystem.CheckOrCreateDir(destPath)
+	defer func() {
+		recover()
+	}()
+
+	err := filesystem2.CheckOrCreateDir(destPath)
 	resChan <- err
 	close(resChan)
 }

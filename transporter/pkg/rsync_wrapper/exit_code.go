@@ -3,8 +3,8 @@ package rsync_wrapper
 import (
 	"errors"
 	"os"
-	"syscall"
 
+	"golang.org/x/sys/unix"
 	"transporter/pkg/exit_code"
 )
 
@@ -146,7 +146,7 @@ func isErrUnRecoverable(errCode int) bool {
 
 // isWaitProcessErr return true if err return by Wait method of Process.
 func isWaitProcessErr(err error) bool {
-	if errors.Is(err, syscall.EINVAL) {
+	if errors.Is(err, unix.EINVAL) {
 		return true
 	}
 

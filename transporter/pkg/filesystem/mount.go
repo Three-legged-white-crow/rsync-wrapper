@@ -6,6 +6,7 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+// Available mount filesystem
 const (
 	NFS       = 0x6969
 	LUSTRE    = 0x0BD00BD0
