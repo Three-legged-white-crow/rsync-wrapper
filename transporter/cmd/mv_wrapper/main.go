@@ -19,7 +19,7 @@ const (
 	slash              = '/'
 	defaultLimtReadDir = 100
 	waitNFSCliUpdate   = 5
-	waitNFSCcliLimit   = 3
+	waitNFSCcliLimit   = 5
 )
 
 func main() {
@@ -68,7 +68,7 @@ func main() {
 	log.Println("[mvWrapper-Info]Start check src path is exist")
 	for {
 		if srcRetryNum >= waitNFSCcliLimit {
-			log.Println("[mvWrapper-Error]src path:", srcPath1,"is not exist, retry stat num:", srcRetryNum)
+			log.Println("[mvWrapper-Error]Src path:", srcPath1,"is not exist, retry stat num:", srcRetryNum)
 			os.Exit(exit_code.ErrNoSuchFileOrDir)
 		}
 
@@ -86,6 +86,13 @@ func main() {
 		srcRetryNum += 1
 	}
 	log.Println("[mvWrapper-Info]Check src path is exist...Exist")
+	log.Println("[mvWrapper-Info]Start check src mount filesystem")
+	err = filesystem.IsMountPath(srcPath1)
+	if err != nil {
+		log.Println("[mvWrapper-Error]Failed to check src mount filesystem, err:", err.Error())
+		filesystem.Exit(err)
+	}
+	log.Println("[mvWrapper-Info]Check src mount filesystem...OK")
 
 	var (
 		isDestExist  bool = false
@@ -116,6 +123,13 @@ func main() {
 		destRetryNum += 1
 	}
 
+	log.Println("[mvWrapper-Info]Start check dest mount filesystem")
+	err = filesystem.CheckMountAllPath(*destPath)
+	if err != nil {
+		log.Println("[mvWrapper-Error]Failed to check dest mount filesystem, err:", err.Error())
+		filesystem.Exit(err)
+	}
+	log.Println("[mvWrapper-Info]Check dest mount filesystem...OK")
 	log.Println("[mvWrapper-Info]End check")
 	log.Println("[mvWrapper-Info]Start move")
 	/*

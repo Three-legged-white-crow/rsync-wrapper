@@ -1,12 +1,9 @@
 package main
 
 import (
-	"errors"
 	"flag"
-	"io/fs"
 	"log"
 	"os"
-	"strings"
 
 	"transporter/pkg/exit_code"
 	"transporter/pkg/filesystem"
@@ -30,6 +27,7 @@ func main() {
 	log.Println("[createWrapper-Info]New create request, path:", *path, "type:", *typeCreate)
 	log.Println("[createWrapper-Info]Start check")
 
+	log.Println("[createWrapper-Info]Start check path format")
 	var isPathAvailable bool
 	switch *typeCreate {
 	case typeFile:
@@ -47,7 +45,8 @@ func main() {
 	}
 	log.Println("[createWrapper-Info]Check path format...OK")
 
-	err := checkMount(*path)
+	log.Println("[createWrapper-Info]Start check mount filesystem")
+	err := filesystem.CheckMountAllPath(*path)
 	if err != nil {
 		log.Println("[createWrapper-Error]Failed to check mount filesystem, err:", err.Error())
 		filesystem.Exit(err)
@@ -76,32 +75,4 @@ func main() {
 	log.Println("[createWrapper-Info]End create")
 	log.Println("[createWrapper-Info]Succeed to create path:", *path, "type:", *typeCreate)
 	os.Exit(exit_code.Succeed)
-}
-
-// checkMount check is path is a mount point and is mount filesystem available.
-// Because some of the directories may not exist,
-// it will check step by step to the parent directory
-// until the subdirectories under the root directory.
-func checkMount(path string) error {
-	numSlash := strings.Count(path, slash)
-	var (
-		indexLastSlash int
-		pathMountCheck string
-		err            error
-	)
-	pathMountCheck = path
-	for i := 0; i < numSlash-1; i++ {
-		indexLastSlash = strings.LastIndex(pathMountCheck, slash)
-		pathMountCheck = pathMountCheck[:indexLastSlash]
-		err = filesystem.IsMountPath(pathMountCheck)
-		if err == nil {
-			return nil
-		}
-
-		if !errors.Is(err, fs.ErrNotExist) {
-			return err
-		}
-	}
-
-	return err
 }

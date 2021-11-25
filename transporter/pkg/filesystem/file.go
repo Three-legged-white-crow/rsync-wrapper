@@ -11,9 +11,9 @@ import (
 )
 
 const (
-	rootDir         = '/'
+	slash           = '/'
 	star            = '*'
-	slash           = "/"
+	slashStr        = "/"
 	permDirDefault  = 0775
 	permFileDefault = 0775
 )
@@ -44,18 +44,18 @@ func CheckFilePathFormat(path string) bool {
 		return false
 	}
 
-	if path[0] != rootDir {
+	if path[0] != slash {
 		return false
 	}
 
 	lastChar := path[l-1]
 
-	if lastChar == rootDir {
+	if lastChar == slash {
 		return false
 	}
 
 	if lastChar == star && len(path) > 1 {
-		if path[l-2] == rootDir {
+		if path[l-2] == slash {
 			return false
 		}
 	}
@@ -83,7 +83,7 @@ func CheckOrCreateFile(filePath string) error {
 		return err
 	}
 
-	parentDirIndex := strings.LastIndex(filePath, slash)
+	parentDirIndex := strings.LastIndex(filePath, slashStr)
 	if parentDirIndex > 1 {
 		parentDirPath := filePath[:parentDirIndex]
 		err = os.MkdirAll(parentDirPath, permDirDefault)

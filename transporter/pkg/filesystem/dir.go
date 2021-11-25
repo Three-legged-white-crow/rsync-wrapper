@@ -8,15 +8,12 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-const defaultReadLimit = 100
-
-
 func CheckDirPathFormat(path string) bool {
 	if len(path) == 0 {
 		return false
 	}
 
-	if path[0] != rootDir {
+	if path[0] != slash {
 		return false
 	}
 
