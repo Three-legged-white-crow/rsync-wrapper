@@ -20,23 +20,63 @@ const (
 )
 
 func main() {
-	path := flag.String("path", emptyValue, "abs path that remove")
-	isReservedDir := flag.Bool("reserved-dir", false, "if specify path is dir, reserved dir or not")
+	mountPath := flag.String(
+		"mount-path",
+		emptyValue,
+		"mount point path")
+
+	relativePath := flag.String(
+		"relative-path",
+		emptyValue,
+		"path relative mount point")
+
+	isReservedDir := flag.Bool(
+		"reserved-dir",
+		false,
+		"if specify path is dir, reserved dir")
+
 	flag.Parse()
 
 	// set output of standard logger to stderr
 	log.SetOutput(os.Stderr)
-	log.Println("[rmWrapper-Info]New rm request, path:", *path, "isReservedDir:", *isReservedDir)
+	log.Println("[rmWrapper-Info]New rm request, relativePath:", *relativePath,
+		"mountPoint:", *mountPath,
+		"isReservedDir:", *isReservedDir)
 	log.Println("[rmWrapper-Info]Start check")
 
-	pathLen := len(*path)
-	rmPath := *path
+	log.Println("[rmWrapper-Info]Start check path format")
+	var (
+		isPathAvailable bool
+		path            string
+		err             error
+	)
+
+	isPathAvailable = filesystem.CheckDirPathFormat(*mountPath)
+	if !isPathAvailable {
+		log.Println("[rmWrapper-Error]Unavailable format of mount point:", *mountPath)
+		os.Exit(exit_code.ErrInvalidArgument)
+	}
+
+	if *relativePath == emptyValue {
+		log.Println("[rmWrapper-Error]Unavailable format of relative path:", *relativePath)
+		os.Exit(exit_code.ErrInvalidArgument)
+	}
+
+	path, err = filesystem.AbsolutePath(*mountPath, *relativePath)
+	if err != nil {
+		log.Println("[rmWrapper-Error]Unavailable format of mount point:", *mountPath,
+			"or relative path:", *relativePath)
+		os.Exit(exit_code.ErrInvalidArgument)
+	}
+
+
+	pathLen := len(path)
+	rmPath := path
 	if rmPath[pathLen-1] == slash {
 		rmPath = rmPath[:pathLen-1]
 	}
 
-	log.Println("[rmWrapper-Error]Start check path format")
-	isPathAvailable := filesystem.CheckFilePathFormat(rmPath)
+	isPathAvailable = filesystem.CheckFilePathFormat(rmPath)
 	if !isPathAvailable {
 		log.Println("[rmWrapper-Error]Unavailable format of path:", rmPath)
 		os.Exit(exit_code.ErrInvalidArgument)
@@ -44,7 +84,6 @@ func main() {
 	log.Println("[rmWrapper-Info]Check path format...OK")
 
 	var (
-		err      error
 		pInfo    os.FileInfo
 		retryNum int
 	)
@@ -72,7 +111,7 @@ func main() {
 	}
 	log.Println("[rmWrapper-Info]Check path is exist...Exist")
 	log.Println("[rmWrapper-Info]Start check path mount filesystem")
-	err = filesystem.IsMountPath(rmPath)
+	err = filesystem.IsMountPath(*mountPath)
 	if err != nil {
 		log.Println("[rmWrapper-Error]Failed to check path mount filesystem, err:", err.Error())
 		filesystem.Exit(err)
@@ -106,7 +145,8 @@ func main() {
 	log.Println("[rmWrapper-Info]Start remove dir:", rmPath, "isReservedDir:", *isReservedDir)
 	err = os.RemoveAll(rmPath)
 	if err != nil {
-		log.Println("[rmWrapper-Error]Failed to remove dir:", rmPath, "isReservedDir:", *isReservedDir,"and err:", err.Error())
+		log.Println("[rmWrapper-Error]Failed to remove dir:", rmPath,
+			"isReservedDir:", *isReservedDir,"and err:", err.Error())
 		filesystem.Exit(err)
 	}
 	log.Println("[rmWrapper-Info]End remove dir:", rmPath, "isReservedDir:", *isReservedDir)
@@ -114,10 +154,12 @@ func main() {
 	if *isReservedDir {
 		err = filesystem.CheckOrCreateDir(rmPath)
 		if err != nil {
-			log.Println("[rmWrapper-Error]Failed to create dir:", rmPath, "isReservedDir:", *isReservedDir, "and err:", err.Error())
+			log.Println("[rmWrapper-Error]Failed to create dir:", rmPath,
+				"isReservedDir:", *isReservedDir, "and err:", err.Error())
 			filesystem.Exit(err)
 		}
-		log.Println("[rmWrapper-Info]Succeed to create dir:", rmPath, "isReservedDir:", *isReservedDir)
+		log.Println("[rmWrapper-Info]Succeed to create dir:", rmPath,
+			"isReservedDir:", *isReservedDir)
 	}
 
 	os.Exit(exit_code.Succeed)

@@ -10,7 +10,9 @@ import (
 )
 
 const (
-	readBuf = 1024
+	readBuf      = 1024
+	MD5Algorithm = "md5"
+	MD5Suffix    = ".md5"
 )
 
 var ErrWriteChecksumContent = errors.New("failed to write full content")

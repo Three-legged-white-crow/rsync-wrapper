@@ -32,6 +32,10 @@ func Exit(err error) {
 		os.Exit(exit_code.ErrFileIsExists)
 	}
 
+	if errors.Is(err, ErrUnavailableFileSystem) {
+		os.Exit(exit_code.ErrUnknownFSType)
+	}
+
 	os.Exit(exit_code.ErrSystem)
 }
 
@@ -64,7 +68,7 @@ func CheckFilePathFormat(path string) bool {
 }
 
 
-func CheckOrCreateFile(filePath string) error {
+func CheckOrCreateFile(filePath string, isOverWrite bool) error {
 	fInfo, err := os.Stat(filePath)
 	if err == nil {
 		if fInfo.Mode().Perm() == permFileDefault {
@@ -92,7 +96,11 @@ func CheckOrCreateFile(filePath string) error {
 		}
 	}
 
-	_, err = os.OpenFile(filePath, unix.O_CREAT, permFileDefault)
+	var openFlag int = unix.O_RDWR|unix.O_CREAT
+	if isOverWrite {
+		openFlag = openFlag|unix.O_TRUNC
+	}
+	_, err = os.OpenFile(filePath, openFlag, permFileDefault)
 	if err != nil {
 		return err
 	}

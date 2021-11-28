@@ -10,13 +10,15 @@ import (
 
 // Available mount filesystem
 const (
-	NFS       = 0x6969
-	LUSTRE    = 0x0BD00BD0
+	NFS     = 0x6969
+	LUSTRE0 = 0x0BD00BD0
+	LUSTRE1 = 0x0BD00BD1
 )
 
 var fsList = []int64{
 	NFS,
-	LUSTRE,
+	LUSTRE0,
+	LUSTRE1,
 }
 
 var ErrUnavailableFileSystem = errors.New("unavailable filesystem")
@@ -87,4 +89,25 @@ func CheckMountAllPath(path string) error {
 	}
 
 	return err
+}
+
+func AbsolutePath(mountPoint, relativePath string) (string, error) {
+	isAvailable := CheckDirPathFormat(mountPoint)
+	if !isAvailable {
+		return "", errors.New("unavailable format of mount point")
+	}
+
+	if mountPoint[len(mountPoint)-1] != slash {
+		mountPoint += slashStr
+	}
+
+	if len(relativePath) == 0 {
+		return mountPoint, nil
+	}
+
+	if relativePath[0] == slash {
+		relativePath = relativePath[1:]
+	}
+
+	return mountPoint + relativePath, nil
 }

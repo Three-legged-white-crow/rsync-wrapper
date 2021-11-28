@@ -8,12 +8,6 @@ COPY transporter /projects/transporter
 WORKDIR /projects/transporter
 RUN make build
 
-# build checksum
-COPY checksum /projects/checksum
-WORKDIR /projects/checksum
-RUN make build
-
-
 # build rsync
 FROM debian:stable-slim as builder-rsync
 RUN apt-get update && \
@@ -31,12 +25,20 @@ WORKDIR /projects/rsync
 RUN ./configure --disable-md2man && \
     make
 
+RUN ldd /projects/rsync/rsync
+RUN /projects/rsync/rsync --version
+
 
 # final image
 FROM debian:stable-slim
 
-COPY --from=builder-transporter /projects/transporter/cmd/transporter /usr/local/bin/
-COPY --from=builder-transporter /projects/checksum/cmd/checksum /usr/local/bin/
+COPY --from=builder-transporter /projects/transporter/cmd/checksum/checksum /usr/local/bin/
+COPY --from=builder-transporter /projects/transporter/cmd/create_wrapper/create-wrapper /usr/local/bin/
+COPY --from=builder-transporter /projects/transporter/cmd/mv_wrapper/mv-wrapper /usr/local/bin/
+COPY --from=builder-transporter /projects/transporter/cmd/rm_wrapper/rm-wrapper /usr/local/bin/
+COPY --from=builder-transporter /projects/transporter/cmd/stat_wrapper/stat-wrapper /usr/local/bin/
+COPY --from=builder-transporter /projects/transporter/cmd/copy/copy /usr/local/bin/
+COPY --from=builder-transporter /projects/transporter/cmd/copylist/copylist /usr/local/bin/
 COPY --from=builder-rsync /projects/rsync/rsync /usr/local/bin/
 
 RUN apt-get update && \
@@ -47,7 +49,12 @@ RUN apt-get clean autoclean && \
     apt-get autoremove -y
 
 # verify
-RUN /usr/local/bin/transporter --help
 RUN /usr/local/bin/checksum --help
+RUN /usr/local/bin/create-wrapper --help
+RUN /usr/local/bin/mv-wrapper --help
+RUN /usr/local/bin/rm-wrapper --help
+RUN /usr/local/bin/stat-wrapper --help
+RUN /usr/local/bin/copy --help
+RUN /usr/local/bin/copylist --help
 RUN ldd /usr/local/bin/rsync
 RUN /usr/local/bin/rsync --version

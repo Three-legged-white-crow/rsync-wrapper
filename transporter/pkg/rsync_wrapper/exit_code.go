@@ -3,84 +3,85 @@ package rsync_wrapper
 import (
 	"errors"
 	"os"
+	"strings"
 
 	"golang.org/x/sys/unix"
 	"transporter/pkg/exit_code"
 )
 
 const (
-	errOK    = 0
-	errOKMsg = "process succeed complete with exit code 0"
+	ErrOK    = 0
+	ErrOKMsg = "process succeed complete with exit code 0"
 
 	// Error codes returned by rsync.
-	errSyntax      = 1   // syntax or usage error
-	errProtocol    = 2   // protocol incompatibility
-	errFileselect  = 3   // errors selecting input/output files, dirs
-	errUnsupported = 4   // requested action not supported
-	errStartclient = 5   // error starting client-server protocol
-	errSocketio    = 10  // error in socket IO
-	errFileio      = 11  // error in file IO
-	errStreamio    = 12  // error in rsync protocol data stream
-	errMessageio   = 13  // errors with program diagnostics
-	errIPC         = 14  // error in IPC code
-	errCrashed     = 15  // sibling process crashed
-	errTerminated  = 16  // sibling process terminated abnormally
-	errSignal1     = 19  // received SIGUSR1
-	errSignal      = 20  // received SIGINT, SIGTERM, or SIGHUP. SIGKILL will handle as unrecoverable err
-	errWaitChild   = 21  // some error returned by waitpid()
-	errMalloc      = 22  // error allocating core memory buffers
-	errPartial     = 23  // partial transfer, some files/attrs were not transferred (see previous errors
-	errVanished    = 24  // file(s) vanished on sender side, some files vanished before they could be transferred
-	errDelLimit    = 25  // skipped some deletes due to --max-delete
-	errTimeout     = 30  // timeout in data send/receive
-	errConTimeout  = 35  // timeout waiting for daemon connection
-	errCmdFailed   = 124 // remote shell failed
-	errCmdKilled   = 125 // remote shell killed
-	errCmdRun      = 126 // remote command could not be run
-	errCmdNotfound = 127 // remote command not found
+	ErrSyntax      = 1   // syntax or usage error
+	ErrProtocol    = 2   // protocol incompatibility
+	ErrFileselect  = 3   // errors selecting input/output files, dirs
+	ErrUnsupported = 4   // requested action not supported
+	ErrStartclient = 5   // error starting client-server protocol
+	ErrSocketio    = 10  // error in socket IO
+	ErrFileio      = 11  // error in file IO
+	ErrStreamio    = 12  // error in rsync protocol data stream
+	ErrMessageio   = 13  // errors with program diagnostics
+	ErrIPC         = 14  // error in IPC code
+	ErrCrashed     = 15  // sibling process crashed
+	ErrTerminated  = 16  // sibling process terminated abnormally
+	ErrSignal1     = 19  // received SIGUSR1
+	ErrSignal      = 20  // received SIGINT, SIGTERM, or SIGHUP. SIGKILL will handle as unrecoverable err
+	ErrWaitChild   = 21  // some error returned by waitpid()
+	ErrMalloc      = 22  // error allocating core memory buffers
+	ErrPartial     = 23  // partial transfer, some files/attrs were not transferred (see previous errors
+	ErrVanished    = 24  // file(s) vanished on sender side, some files vanished before they could be transferred
+	ErrDelLimit    = 25  // skipped some deletes due to --max-delete
+	ErrTimeout     = 30  // timeout in data send/receive
+	ErrConTimeout  = 35  // timeout waiting for daemon connection
+	ErrCmdFailed   = 124 // remote shell failed
+	ErrCmdKilled   = 125 // remote shell killed
+	ErrCmdRun      = 126 // remote command could not be run
+	ErrCmdNotfound = 127 // remote command not found
 
 	// Error codes when start rsync command with exec
-	errCreatePipe  = -10 // failed to create pipe for stdin/stdout/stderr
-	errStartCmd    = -11 // failed to start the specified command
-	errWaitProcess = -12 // failed to wait specified command process
+	ErrCreatePipe  = -10 // failed to create pipe for stdin/stdout/stderr
+	ErrStartCmd    = -11 // failed to start the specified command
+	ErrWaitProcess = -12 // failed to wait specified command process
 )
 
 var (
 	// if get recoverable err of rsync, rsync wrapper will retry run rsync command
 	recoverableErrList = [23]int{
-		errSocketio,
-		errFileio,
-		errStreamio,
-		errMessageio,
-		errIPC,
-		errCrashed,
-		errTerminated,
-		errSignal1,
-		errSignal,
-		errWaitChild,
-		errMalloc,
-		errPartial,
-		errVanished,
-		errDelLimit,
-		errTimeout,
-		errConTimeout,
-		errCmdFailed,
-		errCmdKilled,
-		errCmdRun,
-		errCmdNotfound,
-		errCreatePipe,
-		errStartCmd,
-		errWaitProcess,
+		ErrSocketio,
+		ErrFileio,
+		ErrStreamio,
+		ErrMessageio,
+		ErrIPC,
+		ErrCrashed,
+		ErrTerminated,
+		ErrSignal1,
+		ErrSignal,
+		ErrWaitChild,
+		ErrMalloc,
+		ErrPartial,
+		ErrVanished,
+		ErrDelLimit,
+		ErrTimeout,
+		ErrConTimeout,
+		ErrCmdFailed,
+		ErrCmdKilled,
+		ErrCmdRun,
+		ErrCmdNotfound,
+		ErrCreatePipe,
+		ErrStartCmd,
+		ErrWaitProcess,
 	}
 
 	// if get unRecoverable err of rsync, rsync wrapper will exit direct,
 	// also includes other errors that are unrecoverable and will cause the process to terminate.
 	unRecoverableErrList = [5]int{
-		errSyntax,
-		errProtocol,
-		errFileselect,
-		errUnsupported,
-		errStartclient,
+		ErrSyntax,
+		ErrProtocol,
+		ErrFileselect,
+		ErrUnsupported,
+		ErrStartclient,
 
 		// other errors like:
 		// errSIGKILL
@@ -91,34 +92,65 @@ var (
 	}
 
 	exitCodeMap = map[int]int{
-		errOK:          exit_code.Succeed,
-		errSyntax:      exit_code.ErrInvalidArgument,
-		errProtocol:    exit_code.ErrSystem,
-		errFileselect:  exit_code.ErrNoSuchFileOrDir,
-		errUnsupported: exit_code.ErrInvalidArgument,
-		errStartclient: exit_code.ErrSystem,
-		errSocketio:    exit_code.ErrIOError,
-		errFileio:      exit_code.ErrIOError,
-		errStreamio:    exit_code.ErrIOError,
-		errMessageio:   exit_code.ErrIOError,
-		errIPC:         exit_code.ErrSystem,
-		errCrashed:     exit_code.ErrSystem,
-		errTerminated:  exit_code.ErrSystem,
-		errSignal1:     exit_code.ErrSystem,
-		errSignal:      exit_code.ErrSystem,
-		errWaitChild:   exit_code.ErrSystem,
-		errMalloc:      exit_code.ErrSystem,
-		errPartial:     exit_code.ErrPermissionDenied,
-		errDelLimit:    exit_code.ErrSystem,
-		errTimeout:     exit_code.ErrSystem,
-		errConTimeout:  exit_code.ErrSystem,
-		errCmdFailed:   exit_code.ErrSystem,
-		errCmdKilled:   exit_code.ErrSystem,
-		errCmdRun:      exit_code.ErrSystem,
-		errCmdNotfound: exit_code.ErrSystem,
-		errCreatePipe:  exit_code.ErrSystem,
-		errStartCmd:    exit_code.ErrSystem,
-		errWaitProcess: exit_code.ErrSystem,
+		ErrOK:          exit_code.Succeed,
+		ErrSyntax:      exit_code.ErrInvalidArgument,
+		ErrProtocol:    exit_code.ErrSystem,
+		ErrFileselect:  exit_code.ErrNoSuchFileOrDir,
+		ErrUnsupported: exit_code.ErrInvalidArgument,
+		ErrStartclient: exit_code.ErrSystem,
+		ErrSocketio:    exit_code.ErrIOError,
+		ErrFileio:      exit_code.ErrIOError,
+		ErrStreamio:    exit_code.ErrIOError,
+		ErrMessageio:   exit_code.ErrIOError,
+		ErrIPC:         exit_code.ErrSystem,
+		ErrCrashed:     exit_code.ErrSystem,
+		ErrTerminated:  exit_code.ErrSystem,
+		ErrSignal1:     exit_code.ErrSystem,
+		ErrSignal:      exit_code.ErrSystem,
+		ErrWaitChild:   exit_code.ErrSystem,
+		ErrMalloc:      exit_code.ErrSystem,
+		ErrPartial:     exit_code.ErrPermissionDenied,
+		ErrDelLimit:    exit_code.ErrSystem,
+		ErrTimeout:     exit_code.ErrSystem,
+		ErrConTimeout:  exit_code.ErrSystem,
+		ErrCmdFailed:   exit_code.ErrSystem,
+		ErrCmdKilled:   exit_code.ErrSystem,
+		ErrCmdRun:      exit_code.ErrSystem,
+		ErrCmdNotfound: exit_code.ErrSystem,
+		ErrCreatePipe:  exit_code.ErrSystem,
+		ErrStartCmd:    exit_code.ErrSystem,
+		ErrWaitProcess: exit_code.ErrSystem,
+	}
+
+	// if get one of these err msg, wrapper should exit directly
+	stdExitCodeMsgList = [12]string{
+		"No such file or directory",
+		"Input/output error",
+		"Permission denied",
+		"Device or resource busy",
+		"File exists",
+		"Not a directory",
+		"Is a directory",
+		"Invalid argument",
+		"No space left on device",
+		"Read-only filesystem",
+		"Disk quota exceeded",
+		"Stale file handle",
+	}
+
+	stdExitCodeMap = map[string]int {
+		"No such file or directory": exit_code.ErrNoSuchFileOrDir,
+		"Input/output error":        exit_code.ErrIOError,
+		"Permission denied":         exit_code.ErrPermissionDenied,
+		"Device or resource busy":   exit_code.ErrNoSpaceLeftOnDevice,
+		"File exists":               exit_code.ErrFileIsExists,
+		"Not a directory":           exit_code.ErrNotDirectory,
+		"Is a directory":            exit_code.ErrIsDirectory,
+		"Invalid argument":          exit_code.ErrInvalidArgument,
+		"No space left on device":   exit_code.ErrNoSpaceLeftOnDevice,
+		"Read-only filesystem":      exit_code.ErrFileSystemIsReadOnly,
+		"Disk quota exceeded":       exit_code.ErrDiskQuota,
+		"Stale file handle":         exit_code.ErrFileStale,
 	}
 )
 
@@ -133,8 +165,8 @@ func isErrRecoverable(errCode int) bool {
 	return false
 }
 
-// isErrUnRecoverable return true if err is unrecoverable.
-func isErrUnRecoverable(errCode int) bool {
+// IsErrUnRecoverable return true if err is unrecoverable.
+func IsErrUnRecoverable(errCode int) bool {
 	for _, ec := range unRecoverableErrList {
 		if ec == errCode {
 			return true
@@ -144,8 +176,8 @@ func isErrUnRecoverable(errCode int) bool {
 	return false
 }
 
-// isWaitProcessErr return true if err return by Wait method of Process.
-func isWaitProcessErr(err error) bool {
+// IsWaitProcessErr return true if err return by Wait method of Process.
+func IsWaitProcessErr(err error) bool {
 	if errors.Is(err, unix.EINVAL) {
 		return true
 	}
@@ -154,11 +186,30 @@ func isWaitProcessErr(err error) bool {
 	return ok
 }
 
-func exitCodeConvert(errCode int) int {
+func ExitCodeConvert(errCode int) int {
 	exitCode, ok := exitCodeMap[errCode]
 	if !ok {
 		return exit_code.ErrSystem
 	}
 
 	return exitCode
+}
+
+func ExitCodeConvertWithStderr(errContent string) (int, bool) {
+	errStrList := strings.Split(errContent, "\n")
+
+	errStrLen := len(errStrList)
+	var curErrStr string
+	for i := errStrLen; i > 0; i -= 1 {
+		curErrStr = errStrList[i]
+
+		for _, msg := range stdExitCodeMsgList {
+			if strings.Contains(curErrStr, msg) {
+				exitCode := stdExitCodeMap[msg]
+				return exitCode, true
+			}
+		}
+	}
+
+	return 0, false
 }
