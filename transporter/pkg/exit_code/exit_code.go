@@ -1,14 +1,5 @@
 package exit_code
-/*
-MD5VerifyRefuse       ErrCode = 1401
-MD5VerifyRefuse:       "MD5 verify refuse"
 
-在单文件子任务里，二次拷贝校验依然失败，退出码为： exit(201),  +1200=1401
-在copy by list中，list file文件里，错误码直接是 1401
-
-UnknownFsType         ErrCode = 1402
-UnknownFsType          "Unknown filesystem type",
- */
 const (
 	Succeed                 = 0
 	ErrNoSuchFileOrDir      = 2

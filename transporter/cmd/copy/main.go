@@ -504,8 +504,8 @@ func main() {
 		log.Println("[copy-Info]Succeed to remove temp dest dir:", destTempDirPath)
 	}
 
-	log.Println("[copy-Info]Copy file is end with exit code 0")
-	os.Exit(exit_code.Succeed)
+	log.Println("[copy-Info]Copy file is end with exit code:", exit_code.ErrCopyFileSucceed)
+	os.Exit(exit_code.ErrCopyFileSucceed)
 
 }
 
