@@ -124,33 +124,33 @@ var (
 
 	// if get one of these err msg, wrapper should exit directly
 	stdExitCodeMsgList = [12]string{
-		"No such file or directory",
-		"Input/output error",
-		"Permission denied",
-		"Device or resource busy",
-		"File exists",
-		"Not a directory",
-		"Is a directory",
-		"Invalid argument",
-		"No space left on device",
-		"Read-only filesystem",
-		"Disk quota exceeded",
-		"Stale file handle",
+		exit_code.ErrMsgNOENT,
+		exit_code.ErrMsgIOError,
+		exit_code.ErrMsgPermissionDenided,
+		exit_code.ErrMsgDeviceBusy,
+		exit_code.ErrMsgFileIsExists,
+		exit_code.ErrMsgNotDirectory,
+		exit_code.ErrMsgIsDirectory,
+		exit_code.ErrMsgInval,
+		exit_code.ErrMsgNoSpace,
+		exit_code.ErrMsgFSReadOnly,
+		exit_code.ErrMsgDiskQuota,
+		exit_code.ErrMsgFileStale,
 	}
 
-	stdExitCodeMap = map[string]int {
-		"No such file or directory": exit_code.ErrNoSuchFileOrDir,
-		"Input/output error":        exit_code.ErrIOError,
-		"Permission denied":         exit_code.ErrPermissionDenied,
-		"Device or resource busy":   exit_code.ErrNoSpaceLeftOnDevice,
-		"File exists":               exit_code.ErrFileIsExists,
-		"Not a directory":           exit_code.ErrNotDirectory,
-		"Is a directory":            exit_code.ErrIsDirectory,
-		"Invalid argument":          exit_code.ErrInvalidArgument,
-		"No space left on device":   exit_code.ErrNoSpaceLeftOnDevice,
-		"Read-only filesystem":      exit_code.ErrFileSystemIsReadOnly,
-		"Disk quota exceeded":       exit_code.ErrDiskQuota,
-		"Stale file handle":         exit_code.ErrFileStale,
+	stdExitCodeMap = map[string]int{
+		exit_code.ErrMsgNOENT:             exit_code.ErrNoSuchFileOrDir,
+		exit_code.ErrMsgIOError:           exit_code.ErrIOError,
+		exit_code.ErrMsgPermissionDenided: exit_code.ErrPermissionDenied,
+		exit_code.ErrMsgDeviceBusy:        exit_code.ErrDeviceIsBusy,
+		exit_code.ErrMsgFileIsExists:      exit_code.ErrFileIsExists,
+		exit_code.ErrMsgNotDirectory:      exit_code.ErrNotDirectory,
+		exit_code.ErrMsgIsDirectory:       exit_code.ErrIsDirectory,
+		exit_code.ErrMsgInval:             exit_code.ErrInvalidArgument,
+		exit_code.ErrMsgNoSpace:           exit_code.ErrNoSpaceLeftOnDevice,
+		exit_code.ErrMsgFSReadOnly:        exit_code.ErrFileSystemIsReadOnly,
+		exit_code.ErrMsgDiskQuota:         exit_code.ErrDiskQuota,
+		exit_code.ErrMsgFileStale:         exit_code.ErrFileStale,
 	}
 )
 
