@@ -49,12 +49,12 @@ RUN apt-get clean autoclean && \
     apt-get autoremove -y
 
 # verify
-RUN /usr/local/bin/checksum --help
-RUN /usr/local/bin/create-wrapper --help
-RUN /usr/local/bin/mv-wrapper --help
-RUN /usr/local/bin/rm-wrapper --help
-RUN /usr/local/bin/stat-wrapper --help
-RUN /usr/local/bin/copy --help
-RUN /usr/local/bin/copylist --help
-RUN ldd /usr/local/bin/rsync
-RUN /usr/local/bin/rsync --version
+RUN /usr/local/bin/checksum --help && \
+    /usr/local/bin/create-wrapper --help && \
+    /usr/local/bin/mv-wrapper --help && \
+    /usr/local/bin/rm-wrapper --help && \
+    /usr/local/bin/stat-wrapper --help && \
+    /usr/local/bin/copy --help && \
+    /usr/local/bin/copylist --help && \
+    ldd /usr/local/bin/rsync && \
+    /usr/local/bin/rsync --version

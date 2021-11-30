@@ -7,37 +7,16 @@ import (
 	"strings"
 
 	"golang.org/x/sys/unix"
-	"transporter/pkg/exit_code"
 )
 
 const (
 	slash           = '/'
 	star            = '*'
+	dot             = '.'
 	slashStr        = "/"
 	permDirDefault  = 0775
 	permFileDefault = 0775
 )
-
-
-func Exit(err error) {
-	if errors.Is(err, fs.ErrPermission) {
-		os.Exit(exit_code.ErrPermissionDenied)
-	}
-
-	if errors.Is(err, fs.ErrNotExist) {
-		os.Exit(exit_code.ErrNoSuchFileOrDir)
-	}
-
-	if errors.Is(err, fs.ErrExist) {
-		os.Exit(exit_code.ErrFileIsExists)
-	}
-
-	if errors.Is(err, ErrUnavailableFileSystem) {
-		os.Exit(exit_code.ErrUnknownFSType)
-	}
-
-	os.Exit(exit_code.ErrSystem)
-}
 
 
 func CheckFilePathFormat(path string) bool {
@@ -54,11 +33,20 @@ func CheckFilePathFormat(path string) bool {
 
 	lastChar := path[l-1]
 
+	// case: /home/file/
 	if lastChar == slash {
 		return false
 	}
 
+	// case: /home/file/*
 	if lastChar == star && len(path) > 1 {
+		if path[l-2] == slash {
+			return false
+		}
+	}
+
+	// case: /home/file/.
+	if lastChar == dot && len(path) > 1 {
 		if path[l-2] == slash {
 			return false
 		}

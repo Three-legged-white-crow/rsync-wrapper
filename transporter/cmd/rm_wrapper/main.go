@@ -1,22 +1,32 @@
+// +build amd64,linux
+
 package main
 
 import (
 	"errors"
 	"flag"
+	"io"
 	"io/fs"
 	"log"
 	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
+	"golang.org/x/sys/unix"
 	"transporter/pkg/exit_code"
 	"transporter/pkg/filesystem"
 )
 
 const (
-	emptyValue       = "empty"
-	slash            = '/'
-	waitNFSCliUpdate = 5
-	waitNFSCcliLimit = 5
+	emptyValue        = "empty"
+	slash             = '/'
+	slashStr          = "/"
+	waitNFSCliUpdate  = 5
+	waitNFSCcliLimit  = 5
+	PathSeparator     = '/' // OS-specific path separator
+	PathListSeparator = ':' // OS-specific path list separator
+	reqSize           = 1024
 )
 
 func main() {
@@ -35,13 +45,25 @@ func main() {
 		false,
 		"if specify path is dir, reserved dir")
 
+	fileSuffix := flag.String(
+		"suffix",
+		emptyValue,
+		"suffix of file to remove")
+
+	isDebug := flag.Bool(
+		"debug",
+		false,
+		"enable debug mode")
+
 	flag.Parse()
 
 	// set output of standard logger to stderr
 	log.SetOutput(os.Stderr)
 	log.Println("[rmWrapper-Info]New rm request, relativePath:", *relativePath,
 		"mountPoint:", *mountPath,
-		"isReservedDir:", *isReservedDir)
+		"isReservedDir:", *isReservedDir,
+		"isDebug:", *isDebug,
+	)
 	log.Println("[rmWrapper-Info]Start check")
 
 	log.Println("[rmWrapper-Info]Start check path format")
@@ -49,6 +71,9 @@ func main() {
 		isPathAvailable bool
 		path            string
 		err             error
+		exitCode        int
+		isSuffixEmpty   bool
+		suffixList      []string
 	)
 
 	isPathAvailable = filesystem.CheckDirPathFormat(*mountPath)
@@ -60,6 +85,13 @@ func main() {
 	if *relativePath == emptyValue {
 		log.Println("[rmWrapper-Error]Unavailable format of relative path:", *relativePath)
 		os.Exit(exit_code.ErrInvalidArgument)
+	}
+
+	if *fileSuffix == emptyValue {
+		isSuffixEmpty = true
+		log.Println("[copy-Info]Not specify file suffix")
+	}else {
+		suffixList = strings.Split(*fileSuffix, slashStr)
 	}
 
 	path, err = filesystem.AbsolutePath(*mountPath, *relativePath)
@@ -81,7 +113,24 @@ func main() {
 		log.Println("[rmWrapper-Error]Unavailable format of path:", rmPath)
 		os.Exit(exit_code.ErrInvalidArgument)
 	}
+
+	if endsWithDot(rmPath) {
+		log.Println("[rmWrapper-Error]Path end with dot:", rmPath)
+		os.Exit(exit_code.ErrInvalidArgument)
+	}
+
 	log.Println("[rmWrapper-Info]Check path format...OK")
+
+	if !(*isDebug) {
+		log.Println("[rmWrapper-Info]Start check path mount filesystem")
+		err = filesystem.IsMountPath(*mountPath)
+		if err != nil {
+			log.Println("[rmWrapper-Error]Failed to check path mount filesystem, err:", err.Error())
+			exitCode = exit_code.ExitCodeConvertWithErr(err)
+			os.Exit(exitCode)
+		}
+		log.Println("[rmWrapper-Info]Check path mount filesystem...OK")
+	}
 
 	var (
 		pInfo    os.FileInfo
@@ -104,19 +153,13 @@ func main() {
 
 		if !errors.Is(err, fs.ErrNotExist) {
 			log.Println("[rmWrapper-Error]Failed to stat path:", rmPath, "and err:", err.Error())
-			filesystem.Exit(err)
+			exitCode = exit_code.ExitCodeConvertWithErr(err)
+			os.Exit(exitCode)
 		}
 
 		retryNum += 1
 	}
 	log.Println("[rmWrapper-Info]Check path is exist...Exist")
-	log.Println("[rmWrapper-Info]Start check path mount filesystem")
-	err = filesystem.IsMountPath(*mountPath)
-	if err != nil {
-		log.Println("[rmWrapper-Error]Failed to check path mount filesystem, err:", err.Error())
-		filesystem.Exit(err)
-	}
-	log.Println("[rmWrapper-Info]Check path mount filesystem...OK")
 
 	/*
 		path is not exist -> exit with code 0;
@@ -135,32 +178,167 @@ func main() {
 		err = os.Remove(rmPath)
 		if err != nil {
 			log.Println("[rmWrapper-Error]Failed to remove file:", rmPath, "and err:", err.Error())
-			filesystem.Exit(err)
+			exitCode = exit_code.ExitCodeConvertWithErr(err)
+			os.Exit(exitCode)
 		}
 		log.Println("[rmWrapper-Info]End remove file:", rmPath)
 		os.Exit(exit_code.Succeed)
 	}
 
 	// rm path is dir
-	log.Println("[rmWrapper-Info]Start remove dir:", rmPath, "isReservedDir:", *isReservedDir)
-	err = os.RemoveAll(rmPath)
-	if err != nil {
-		log.Println("[rmWrapper-Error]Failed to remove dir:", rmPath,
-			"isReservedDir:", *isReservedDir,"and err:", err.Error())
-		filesystem.Exit(err)
-	}
-	log.Println("[rmWrapper-Info]End remove dir:", rmPath, "isReservedDir:", *isReservedDir)
-
-	if *isReservedDir {
-		err = filesystem.CheckOrCreateDir(rmPath)
+	log.Println("[rmWrapper-Info]Start remove dir:", rmPath,
+		"isReservedDir:", *isReservedDir,
+		"fileSuffix:", *fileSuffix)
+	if !(*isReservedDir) {
+		err = os.RemoveAll(rmPath)
 		if err != nil {
-			log.Println("[rmWrapper-Error]Failed to create dir:", rmPath,
-				"isReservedDir:", *isReservedDir, "and err:", err.Error())
-			filesystem.Exit(err)
+			log.Println("[rmWrapper-Error]Failed to remove dir:", rmPath,
+				"isReservedDir:", *isReservedDir,
+				"fileSuffix:", *fileSuffix,
+				"and err:", err.Error())
+			exitCode = exit_code.ExitCodeConvertWithErr(err)
+			os.Exit(exitCode)
 		}
-		log.Println("[rmWrapper-Info]Succeed to create dir:", rmPath,
-			"isReservedDir:", *isReservedDir)
+
+		log.Println("[rmWrapper-Info]End remove dir:", rmPath,
+			"isReservedDir:", *isReservedDir,
+			"fileSuffix:", *fileSuffix)
+		os.Exit(exit_code.Succeed)
 	}
 
-	os.Exit(exit_code.Succeed)
+	// reserved dir
+	err = removeChild(rmPath, isSuffixEmpty, suffixList)
+	if err == nil {
+		os.Exit(exit_code.Succeed)
+	}
+
+	exitCode = exit_code.ExitCodeConvertWithErr(err)
+}
+
+
+func isNeedRemove(fileName string, fileSuffixList []string) bool {
+	if fileSuffixList == nil {
+		return false
+	}
+
+	var	isMatch bool
+	for _, suffix := range fileSuffixList {
+		isMatch, _ = filepath.Match(suffix, fileName)
+		if isMatch {
+			return true
+		}
+	}
+	return false
+}
+
+func removeChild(path string, isSuffixEmpty bool, suffixList []string) error {
+	if path == "" {
+		// fail silently to retain compatibility with previous behavior
+		// of RemoveAll. See issue 28830.
+		return nil
+	}
+
+	// The rmdir system call does not permit removing ".",
+	// so we don't permit it either.
+	if endsWithDot(path) {
+		return unix.EINVAL
+	}
+
+	pathLen := len(path)
+	if path[pathLen-1] != slash {
+		path += slashStr
+	}
+
+	var (
+		respSize int
+		dirF *os.File
+		err error
+		nameList  []string
+		childname string
+		childPath string
+		numErr    int
+	)
+
+	for {
+		dirF, err = os.Open(path)
+		if errors.Is(err, fs.ErrNotExist) {
+			// If path does not exist, Fail silently
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+
+		for {
+			numErr = 0
+			nameList, err = dirF.Readdirnames(reqSize)
+			if errors.Is(err, fs.ErrNotExist) {
+				dirF.Close()
+				return nil
+			}
+
+			if err != nil {
+				dirF.Close()
+				if err == io.EOF {
+					return nil
+				}
+
+				return err
+			}
+
+			respSize = len(nameList)
+
+			for _, childname = range nameList {
+				// only specify suffix and not match file skip current entry
+				if !isSuffixEmpty && !isNeedRemove(childname, suffixList) {
+					continue
+				}
+
+				childPath = path + childname
+				err = os.RemoveAll(childPath)
+				if err != nil {
+					numErr += 1
+					log.Println(
+						"[rmWrapper-Warning]Failed to remove path:", childPath,
+						"and err:", err.Error())
+				}
+			}
+
+			// If we can delete any entry, break to start new iteration.
+			// Otherwise, we discard current names, continue get next entries and try deleting them.
+			if numErr != reqSize {
+				break
+			}
+		}
+
+		// Removing files from the directory may have caused
+		// the OS to reshuffle it. Simply calling Readdirnames
+		// again may skip some entries. The only reliable way
+		// to avoid this is to close and re-open the
+		// directory. See issue 20841.
+		dirF.Close()
+
+		// Finish when the end of the directory is reached
+		if respSize < reqSize {
+			break
+		}
+	}
+
+	return nil
+}
+
+// endsWithDot reports whether the final component of path is ".".
+func endsWithDot(path string) bool {
+	if path == "." {
+		return true
+	}
+	if len(path) >= 2 && path[len(path)-1] == '.' && IsPathSeparator(path[len(path)-2]) {
+		return true
+	}
+	return false
+}
+
+// IsPathSeparator reports whether c is a directory separator character.
+func IsPathSeparator(c uint8) bool {
+	return PathSeparator == c
 }

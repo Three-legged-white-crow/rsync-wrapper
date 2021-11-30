@@ -56,28 +56,3 @@ func CopyFile(src, dest string) int {
 
 	return exit_code.Succeed
 }
-
-
-type ReqFileList struct {
-	SrcMountPath          string
-	DestMountPath         string
-	InputRecordFile       string
-	OutputRecordFile      string
-	IgnoreSrcNotExist     bool
-	IgnoreSrcIsDir        bool
-	IgnoreDstIsExistDir   bool
-	OverWriteDstExistFile bool
-}
-
-func CopyFileList(req ReqFileList) {
-	// todo: load src file rel path and dest file rel path from inFile
-
-	// todo: build complete src file path and dest file path
-
-	// todo: check src / dest exist and is dir
-
-	// todo: call Run to rsync file
-
-	// todo: record failed to outFile
-
-}

@@ -52,6 +52,3 @@ copy-clean:
 
 copylist-clean:
 	rm -f cmd/copylist/copylist
-
-docker:
-	docker build -t rsync-wrapper:latest --rm . --no-cache

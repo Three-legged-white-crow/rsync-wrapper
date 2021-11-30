@@ -46,6 +46,11 @@ func main() {
 		false,
 		"generate checksum file to dest path")
 
+	isDebug := flag.Bool(
+		"debug",
+		false,
+		"enable debug mode")
+
 	flag.Parse()
 
 	// set output of standard logger to stderr
@@ -55,7 +60,9 @@ func main() {
 		"srcMountPath:", *srcMountPath,
 		"destMountPath:", *destMountPath,
 		"algorithm:", *checksumAlgorithm,
-		"isGenerateChecksumFile", *isGenerateChecksumFile)
+		"isGenerateChecksumFile", *isGenerateChecksumFile,
+		"isDebug:", *isDebug,
+	)
 	log.Println("[checksum-Info]Start check")
 	log.Println("[checksum-Info]Start check format")
 
@@ -64,6 +71,7 @@ func main() {
 		srcFilePath     string
 		destFilePath    string
 		err             error
+		exitCode        int
 	)
 
 	isPathAvailable = filesystem.CheckDirPathFormat(*srcMountPath)
@@ -121,36 +129,43 @@ func main() {
 	}
 	log.Println("[checksum-Info]Check algorithm...OK")
 
-	log.Println("[checksum-Info]Start check mount filesystem")
-	err = filesystem.IsMountPath(*srcMountPath)
-	if err != nil {
-		log.Println("[checksum-Error]Failed to check mount of src mount point:", *srcMountPath,
-			"and err:", err.Error())
-		filesystem.Exit(err)
+	if !(*isDebug) {
+		log.Println("[checksum-Info]Start check mount filesystem")
+		err = filesystem.IsMountPath(*srcMountPath)
+		if err != nil {
+			log.Println("[checksum-Error]Failed to check mount of src mount point:", *srcMountPath,
+				"and err:", err.Error())
+			exitCode = exit_code.ExitCodeConvertWithErr(err)
+			os.Exit(exitCode)
+		}
+
+		err = filesystem.IsMountPath(*destMountPath)
+		if err != nil {
+			log.Println("[checksum-Error]Failed to check mount of dest mount point:", *destMountPath,
+				"and err:", err.Error())
+			exitCode = exit_code.ExitCodeConvertWithErr(err)
+			os.Exit(exitCode)
+		}
+		log.Println("[checksum-Info]Check mount filesystem...OK")
 	}
 
-	err = filesystem.IsMountPath(*destMountPath)
-	if err != nil {
-		log.Println("[checksum-Error]Failed to check mount of dest mount point:", *destMountPath,
-			"and err:", err.Error())
-		filesystem.Exit(err)
-	}
-	log.Println("[checksum-Info]Check mount filesystem...OK")
 	log.Println("[checksum-Info]End check")
 
 	log.Println("[checksum-Info]Start checksum")
 	var srcChecksum []byte
-	srcChecksum, err = checksum.MD5Checksum(srcFilePath)
+	srcChecksum, err = checksum.MD5(srcFilePath)
 	if err != nil {
 		log.Println("[checksum-Error]Failed to generate checksum of src file, err:", err.Error())
-		filesystem.Exit(err)
+		exitCode = exit_code.ExitCodeConvertWithErr(err)
+		os.Exit(exitCode)
 	}
 
 	var destChecksum []byte
-	destChecksum, err = checksum.MD5Checksum(destFilePath)
+	destChecksum, err = checksum.MD5(destFilePath)
 	if err != nil {
 		log.Println("[checksum-Error]Failed to generate checksum of dest file, err:", err.Error())
-		filesystem.Exit(err)
+		exitCode = exit_code.ExitCodeConvertWithErr(err)
+		os.Exit(exitCode)
 	}
 
 	isEqual := checksum.Compare(srcChecksum, destChecksum)

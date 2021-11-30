@@ -100,6 +100,11 @@ func main() {
 		emptyValue,
 		"track file relative to the dest mount point")
 
+	isDebug := flag.Bool(
+		"debug",
+		false,
+		"enable debug mode")
+
 	flag.Parse()
 
 	// set output of standard logger to stderr
@@ -119,15 +124,21 @@ func main() {
 		"isGenerateChecksumFile:", *isGenerateChecksumFile,
 		"fileSuffixForChecksum:", *fileSuffixForChecksum,
 		"trackFileRelativePath:", *trackFileRelativePath,
+		"isDebug:", *isDebug,
 	)
 
 	log.Println("[copy-Info]Start basic check")
 	log.Println("[copy-Info]Start basic check format")
 	var (
-		isPathAvailable  bool
-		srcPath          string
-		destTempDirPath  string
-		err              error
+		isPathAvailable        bool
+		srcPath                string
+		destTempDirPath        string
+		err                    error
+		isCreateTrackFile      bool
+		exitCode               int
+		isChecksumSuffixEmpty  bool
+		isFileNeedChecksum     bool
+		checksumFileSuffixList []string
 	)
 
 	isPathAvailable = filesystem.CheckDirPathFormat(*srcMountPath)
@@ -157,6 +168,16 @@ func main() {
 		os.Exit(exit_code.ErrInvalidArgument)
 	}
 
+	if *fileSuffixForChecksum == emptyValue {
+		isChecksumSuffixEmpty = true
+		log.Println("[copy-Info]Not specify checksum suffix, not checksum")
+	}else {
+		checksumFileSuffixList = strings.Split(*fileSuffixForChecksum, slashStr)
+	}
+
+	if *trackFileRelativePath != emptyValue {
+		isCreateTrackFile = true
+	}
 
 	// not need check err, because format of mount point has already been checked above
 	srcPath, _ = filesystem.AbsolutePath(*srcMountPath, *srcRelativePath)
@@ -185,21 +206,26 @@ func main() {
 	}
 	log.Println("[copy-Info]Check basic format...OK")
 
-	log.Println("[copy-Info]Start check mount filesystem")
-	err = filesystem.IsMountPath(*srcMountPath)
-	if err != nil {
-		log.Println("[copy-Info]Failed to check src mount filesystem:", *srcMountPath,
-			"and err:", err.Error())
-		filesystem.Exit(err)
+	if !(*isDebug) {
+		log.Println("[copy-Info]Start check mount filesystem")
+		err = filesystem.IsMountPath(*srcMountPath)
+		if err != nil {
+			log.Println("[copy-Info]Failed to check src mount filesystem:", *srcMountPath,
+				"and err:", err.Error())
+			exitCode = exit_code.ExitCodeConvertWithErr(err)
+			os.Exit(exitCode)
+		}
+
+		err = filesystem.IsMountPath(*destMountPath)
+		if err != nil {
+			log.Println("[copy-Info]Failed to check dest mount filesystem:", *destMountPath,
+				"and err:", err.Error())
+			exitCode = exit_code.ExitCodeConvertWithErr(err)
+			os.Exit(exitCode)
+		}
+		log.Println("[copy-Info]Check mount filesystem...OK")
 	}
 
-	err = filesystem.IsMountPath(*destMountPath)
-	if err != nil {
-		log.Println("[copy-Info]Failed to check dest mount filesystem:", *destMountPath,
-			"and err:", err.Error())
-		filesystem.Exit(err)
-	}
-	log.Println("[copy-Info]Check mount filesystem...OK")
 	log.Println("[copy-Info]End basic check")
 
 	/*
@@ -253,7 +279,8 @@ func main() {
 		if errors.Is(err, fs.ErrNotExist) {
 			log.Println("[copy-Error]Failed to stat src path:", srcPath1,
 				"and err:", err.Error())
-			filesystem.Exit(err)
+			exitCode = exit_code.ExitCodeConvertWithErr(err)
+			os.Exit(exitCode)
 		}
 
 		retryNum += 1
@@ -266,7 +293,8 @@ func main() {
 	if err != nil {
 		if !errors.Is(err, fs.ErrNotExist) {
 			log.Println("[copy-Error]Failed to stat temp dest dir:", destTempDirPath, "and err:", err.Error())
-			filesystem.Exit(err)
+			exitCode = exit_code.ExitCodeConvertWithErr(err)
+			os.Exit(exitCode)
 		}
 
 		log.Println("[copy-Info]Check temp dest dir...NotExist")
@@ -274,7 +302,8 @@ func main() {
 		if err != nil {
 			log.Println("[copy-Error]Failed to create temp dest dir:", destTempDirPath,
 				"and err:", err.Error())
-			filesystem.Exit(err)
+			exitCode = exit_code.ExitCodeConvertWithErr(err)
+			os.Exit(exitCode)
 		}
 		log.Println("[copy-Info]Succeed to create temp dest dir:", destTempDirPath)
 	}else {
@@ -287,7 +316,30 @@ func main() {
 
 	// src is dir
 	if srcInfo.IsDir() {
-		log.Println("[copy-Info]Src is dir, ready copy")
+
+		// case: cp -rf /home/dir/* /home/dir/
+		if *isExcludeSrcDir && ((srcPath1 + slashStr) == destFinalDirPath) {
+			log.Println(
+				"[copy-Error]The source and destination are the same file, parent dir:",
+				destFinalDirPath)
+			os.Exit(exit_code.ErrSrcAndDstAreSameFile)
+		}
+
+		// case: cp -rf /home/dir /home/
+		if !(*isExcludeSrcDir) && (srcPath1 == (destFinalDirPath + srcInfo.Name())) {
+			log.Println(
+				"[copy-Error]The source and destination are the same file, parent dir:",
+				destFinalDirPath)
+			os.Exit(exit_code.ErrSrcAndDstAreSameFile)
+		}
+
+		if !(*isExcludeSrcDir) && ((srcPath1 + slashStr) == destFinalDirPath) {
+			log.Println("[copy-Error]Cannot copy a directory into itself, dir:",
+				srcPath1)
+			os.Exit(exit_code.ErrDirectoryNestedItself)
+		}
+
+			log.Println("[copy-Info]Src is dir, ready copy")
 		if *isExcludeSrcDir {
 			log.Println("[copy-Info]Start check final dest dir has same name file or dir that wait copy")
 			var isDestFinalDirAvailable bool
@@ -295,7 +347,8 @@ func main() {
 			if err != nil {
 				log.Println("[copy-Error]Faild to check final dest dir is available:", destFinalDirPath,
 					"and err:", err.Error())
-				filesystem.Exit(err)
+				exitCode = exit_code.ExitCodeConvertWithErr(err)
+				os.Exit(exitCode)
 			}
 
 			if !isDestFinalDirAvailable {
@@ -322,7 +375,7 @@ func main() {
 
 		startTime := time.Now().String()
 		log.Println("[copy-Info]Dir copy, start at:", startTime)
-		exitCode := dir.Run(reqCopyDir)
+		exitCode = dir.Run(reqCopyDir)
 		endTime := time.Now().String()
 		log.Println("[copy-Info]Dir copy, end at:", endTime)
 
@@ -343,14 +396,17 @@ func main() {
 	log.Println("[copy-Info]Check src path format...OK")
 
 
-	trackFilePath, _ := filesystem.AbsolutePath(*destMountPath, *trackFileRelativePath)
-
-	isPathAvailable = filesystem.CheckFilePathFormat(trackFilePath)
-	if !isPathAvailable {
-		log.Println("[copy-Error]Unavailable track file path:", trackFilePath)
-		os.Exit(exit_code.ErrInvalidArgument)
+	var trackFilePath string
+	if isCreateTrackFile {
+		trackFilePath, _ = filesystem.AbsolutePath(*destMountPath, *trackFileRelativePath)
+		log.Println("[copy-Info]Need create track file:", trackFilePath)
+		isPathAvailable = filesystem.CheckFilePathFormat(trackFilePath)
+		if !isPathAvailable {
+			log.Println("[copy-Error]Unavailable track file path:", trackFilePath)
+			os.Exit(exit_code.ErrInvalidArgument)
+		}
+		log.Println("[copy-Info]Check track file format...OK")
 	}
-	log.Println("[copy-Info]Check track file format...OK")
 
 	log.Println("[copy-Info]Start check final dest dir is exist")
 	var destFinalDirInfo os.FileInfo
@@ -358,7 +414,8 @@ func main() {
 	if err != nil {
 		if !errors.Is(err, fs.ErrNotExist) {
 			log.Println("[copy-Error]Failed to stat final dest dir:", destFinalDirPath, "and err:", err.Error())
-			filesystem.Exit(err)
+			exitCode = exit_code.ExitCodeConvertWithErr(err)
+			os.Exit(exitCode)
 		}
 
 		log.Println("[copy-Info]Check final dest dir...NotExist")
@@ -366,7 +423,8 @@ func main() {
 		if err != nil {
 			log.Println("[copy-Error]Failed to create final dest dir:", destFinalDirPath,
 				"and err:", err.Error())
-			filesystem.Exit(err)
+			exitCode = exit_code.ExitCodeConvertWithErr(err)
+			os.Exit(exitCode)
 		}
 		log.Println("[copy-Info]Succeed to create final dest dir:", destFinalDirPath)
 	}else {
@@ -377,6 +435,12 @@ func main() {
 		}
 	}
 
+	// case: cp /home/dir/file /home/dir/ or cp /home/dir/file /home/dir/file
+	if (srcPath1 == (destFinalDirPath + srcInfo.Name())) || (srcPath1 + slashStr == destFinalDirPath) {
+		log.Println("[copy-Error]The source and destination are the same file, file:", srcPath1)
+		os.Exit(exit_code.ErrSrcAndDstAreSameFile)
+	}
+
 	log.Println("[copy-Info]Start copy file, Step 1 -> copy file from src:", srcPath1,
 		"to temp dest dir:", destTempDirPath)
 	fileName := srcInfo.Name()
@@ -384,7 +448,7 @@ func main() {
 	destTempCheckFileName := destTempFileName + checksum.MD5Suffix
 	destFinalFileName := destFinalDirPath + fileName
 	destFinalCheckFileName := destFinalFileName + checksum.MD5Suffix
-	exitCode := file.CopyFile(srcPath1, destTempFileName)
+	exitCode = file.CopyFile(srcPath1, destTempFileName)
 	if exitCode != exit_code.Succeed {
 		log.Println("[copy-Error]Failed to copy(1) file from src:", srcPath1,
 			"to dest:", destTempFileName,
@@ -394,32 +458,28 @@ func main() {
 
 	log.Println("[copy-Info]Succeed to copy(1) file from src:", srcPath1,
 		"to dest:", destTempFileName)
-	checksumFileSuffixList := strings.Split(*fileSuffixForChecksum, slashStr)
-	isFileNeedChecksum := isNeedChecksum(fileName, checksumFileSuffixList)
-	if isFileNeedChecksum {
+
+	if !isChecksumSuffixEmpty && isNeedChecksum(fileName, checksumFileSuffixList) {
+		isFileNeedChecksum = true
+
 		log.Println("[copy-Info]Start checksum(1), src:", srcPath1, "dir:", destTempFileName)
-		err = checksumFile(srcPath1, destTempFileName, *isGenerateChecksumFile)
+		err = checksum.MD5Checksum(srcPath1, destTempFileName, *isGenerateChecksumFile)
 		if err != nil {
 			// internal retry again
 			err = os.Remove(destTempFileName)
 			if err != nil {
 				if !errors.Is(err, fs.ErrNotExist) {
-					log.Println("[copy-Error]Failed to remove temp dest file:", destTempFileName,
+					log.Println(
+						"[copy-Error]Internal retry at copy file, failed to remove temp dest file:", destTempFileName,
 						"and err:", err.Error())
-					filesystem.Exit(err)
+					exitCode = exit_code.ExitCodeConvertWithErr(err)
+					os.Exit(exitCode)
 				}
 			}
 			log.Println("[copy-Info]Internal retry at copy file, succeed to remove temp dest file")
-			err = os.Remove(destTempCheckFileName)
-			if err != nil {
-				if !errors.Is(err, fs.ErrNotExist) {
-					log.Println("[copy-Error]Failed to remove temp dest checksum file:", destTempCheckFileName,
-						"and err:", err.Error())
-					filesystem.Exit(err)
-				}
-			}
-			log.Println("[copy-Info]Internal retry at copy file, succeed to remove temp dest checksum file")
 
+			log.Println("[copy-Info]Internal retry at copy file, start copy(2) file from src:", srcPath1,
+				"to dest:", destTempFileName)
 			exitCode = file.CopyFile(srcPath1, destTempFileName)
 			if exitCode != exit_code.Succeed {
 				log.Println(
@@ -428,21 +488,27 @@ func main() {
 					"and exit code:", exitCode)
 				os.Exit(exitCode)
 			}
+			log.Println("[copy-Info]Internal retry at copy file, succeed to copy(2) file from src:", srcPath1,
+				"to dest:", destTempFileName)
 
-
-			err = checksumFile(srcPath1, destTempFileName, *isGenerateChecksumFile)
+			log.Println("[copy-Info]Internal retry at copy file, start to checksum(2) file src:", srcPath1,
+				"with dest:", destTempFileName)
+			err = checksum.MD5Checksum(srcPath1, destTempFileName, *isGenerateChecksumFile)
 			if err != nil {
 				log.Println(
 					"[copy-Error]Internal retry at copy file, failed to checksum(2) again, and err:",
 					err.Error())
 				os.Exit(exit_code.ErrChecksumRefuse)
 			}
+			log.Println("[copy-Info]Internal retry at copy file, succeed to checksum(2) file src:", srcPath1,
+				"with dest:", destTempFileName)
 		}
 		log.Println("[copy-Info]Succeed to checksum src:", srcPath1, "dest:", destTempFileName)
-	}
-	log.Println("[copy-Info]Succeed to copy file from src:", srcPath1, "to temp dest:", destTempFileName)
 
-	log.Println("[copy-Info]Start copy file, Step 2-> copy file from temp dest:", destTempFileName,
+	}
+
+
+	log.Println("[copy-Info]Start copy file, ->Step 2-> copy file from temp dest:", destTempFileName,
 		"to final dest:", destFinalFileName)
 	var destFinalFileInfo os.FileInfo
 	destFinalFileInfo, err = os.Stat(destFinalFileName)
@@ -450,7 +516,8 @@ func main() {
 		if !errors.Is(err, fs.ErrNotExist) {
 			log.Println("[copy-Error]Failed to stat final dest file:", destFinalFileName,
 				"and err:", err.Error())
-			filesystem.Exit(err)
+			exitCode = exit_code.ExitCodeConvertWithErr(err)
+			os.Exit(exitCode)
 		}
 	}
 
@@ -470,36 +537,44 @@ func main() {
 	err = os.Rename(destTempFileName, destFinalFileName)
 	if err != nil {
 		log.Println("[copy-Error]Failed to rename dest file from temp:", destTempFileName,
-			"to final:", destFinalFileName)
-		filesystem.Exit(err)
-	}
-	err = os.Rename(destTempCheckFileName, destFinalCheckFileName)
-	if err != nil {
-		log.Println("[copy-Error]Failed to rename dest checksum file from temp:", destTempCheckFileName,
-			"to final:", destFinalCheckFileName)
-		filesystem.Exit(err)
+			"to final:", destFinalFileName, "and err:", err.Error())
+		exitCode = exit_code.ExitCodeConvertWithErr(err)
+		os.Exit(exitCode)
 	}
 	log.Println(
 		"[copy-Info]Succeed to rename file from temp dest:", destTempFileName,
 		"to final dest:", destFinalFileName)
 
-	log.Println(
-		"[copy-Info]Succeed to rename checksum file from temp dest:", destTempCheckFileName,
-		"to final dest:", destFinalCheckFileName)
-
-	log.Println("[copy-Info]Start create track file:", trackFilePath)
-	err = filesystem.CheckOrCreateFile(trackFilePath, false)
-	if err != nil {
-		log.Println("[copy-Info]Failed to check or create track file:", trackFilePath,
-			"and err:", err.Error())
-		filesystem.Exit(err)
+	if isFileNeedChecksum && *isGenerateChecksumFile {
+		err = os.Rename(destTempCheckFileName, destFinalCheckFileName)
+		if err != nil {
+			log.Println("[copy-Error]Failed to rename dest checksum file from temp:", destTempCheckFileName,
+				"to final:", destFinalCheckFileName, "and err:", err.Error())
+			exitCode = exit_code.ExitCodeConvertWithErr(err)
+			os.Exit(exitCode)
+		}
+		log.Println(
+			"[copy-Info]Succeed to rename checksum file from temp dest:", destTempCheckFileName,
+			"to final dest:", destFinalCheckFileName)
 	}
-	log.Println("[copy-Info]Succeed to create track file:", trackFilePath)
+
+	if isCreateTrackFile {
+		log.Println("[copy-Info]Start create track file:", trackFilePath)
+		err = filesystem.CheckOrCreateFile(trackFilePath, false)
+		if err != nil {
+			log.Println("[copy-Error]Failed to check or create track file:", trackFilePath,
+				"and err:", err.Error())
+			exitCode = exit_code.ExitCodeConvertWithErr(err)
+			os.Exit(exitCode)
+		}
+		log.Println("[copy-Info]Succeed to create track file:", trackFilePath)
+	}
 
 	log.Println("[copy-Info]Remove temp dest dir:", destTempDirPath)
 	err = os.RemoveAll(destTempDirPath)
 	if err != nil {
-		log.Println("[copy-Waring]Failed to remove temp dest dir:", destTempDirPath)
+		log.Println("[copy-Waring]Failed to remove temp dest dir:", destTempDirPath,
+			"and err:", err.Error())
 	}else {
 		log.Println("[copy-Info]Succeed to remove temp dest dir:", destTempDirPath)
 	}
@@ -510,6 +585,10 @@ func main() {
 }
 
 func isNeedChecksum(fileName string, fileSuffixList []string) bool {
+	if fileSuffixList == nil {
+		return false
+	}
+
 	var	isMatch bool
 	for _, suffix := range fileSuffixList {
 		isMatch, _ = filepath.Match(suffix, fileName)
@@ -518,35 +597,6 @@ func isNeedChecksum(fileName string, fileSuffixList []string) bool {
 		}
 	}
 	return false
-}
-
-func checksumFile(srcFilePath, destFilePath string, isGenerateChecksumFile bool) error {
-	var srcChecksum []byte
-	var err error
-	srcChecksum, err = checksum.MD5Checksum(srcFilePath)
-	if err != nil {
-		return err
-	}
-
-	var destChecksum []byte
-	destChecksum, err = checksum.MD5Checksum(destFilePath)
-	if err != nil {
-		return err
-	}
-
-	isEqual := checksum.Compare(srcChecksum, destChecksum)
-	if !isEqual {
-		return err
-	}
-
-	if isGenerateChecksumFile {
-		md5DestFilePath := destFilePath + checksum.MD5Suffix
-		err = checksum.MD5File(md5DestFilePath, destChecksum)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 func checkDestFinalDir(srcDirPath, destDirPath string) (bool, error) {

@@ -15,9 +15,9 @@ const (
 	MD5Suffix    = ".md5"
 )
 
-var ErrWriteChecksumContent = errors.New("failed to write full content")
+var ErrNotEqual = errors.New("checksum result of src and dest is not equal")
 
-func MD5Checksum(filePath string) ([]byte, error) {
+func MD5(filePath string) ([]byte, error) {
 	f, err := os.Open(filePath)
 	if err != nil {
 		return nil, err
@@ -58,7 +58,7 @@ func Compare(src, dest []byte) bool {
 func MD5File(path string, res []byte) error {
 
 	dst := make([]byte, hex.EncodedLen(len(res)))
-	l := hex.Encode(dst, res)
+	hex.Encode(dst, res)
 	reshex := string(dst)
 
 	log.Println("[Checksum-Info]Hexadecimal encoding checksum string:", reshex)
@@ -69,14 +69,39 @@ func MD5File(path string, res []byte) error {
 	}
 	defer f.Close()
 
-	n, err := f.Write(dst)
+	_, err = f.Write(dst)
 	if err != nil {
 		return err
 	}
 
-	if n != l {
-		return ErrWriteChecksumContent
+	return nil
+}
+
+func MD5Checksum(srcFilePath, destFilePath string, isGenerateChecksumFile bool) error {
+	var srcChecksum []byte
+	var err error
+	srcChecksum, err = MD5(srcFilePath)
+	if err != nil {
+		return err
 	}
 
+	var destChecksum []byte
+	destChecksum, err = MD5(destFilePath)
+	if err != nil {
+		return err
+	}
+
+	isEqual := Compare(srcChecksum, destChecksum)
+	if !isEqual {
+		return ErrNotEqual
+	}
+
+	if isGenerateChecksumFile {
+		md5DestFilePath := destFilePath + MD5Suffix
+		err = MD5File(md5DestFilePath, destChecksum)
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }

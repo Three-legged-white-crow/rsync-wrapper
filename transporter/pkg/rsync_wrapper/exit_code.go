@@ -1,3 +1,5 @@
+// +build amd64,linux
+
 package rsync_wrapper
 
 import (
@@ -91,7 +93,7 @@ var (
 
 	}
 
-	exitCodeMap = map[int]int{
+	rsyncExitCodeMap = map[int]int{
 		ErrOK:          exit_code.Succeed,
 		ErrSyntax:      exit_code.ErrInvalidArgument,
 		ErrProtocol:    exit_code.ErrSystem,
@@ -187,7 +189,7 @@ func IsWaitProcessErr(err error) bool {
 }
 
 func ExitCodeConvert(errCode int) int {
-	exitCode, ok := exitCodeMap[errCode]
+	exitCode, ok := rsyncExitCodeMap[errCode]
 	if !ok {
 		return exit_code.ErrSystem
 	}
@@ -200,7 +202,7 @@ func ExitCodeConvertWithStderr(errContent string) (int, bool) {
 
 	errStrLen := len(errStrList)
 	var curErrStr string
-	for i := errStrLen; i > 0; i -= 1 {
+	for i := errStrLen-1; i >= 0; i -= 1 {
 		curErrStr = errStrList[i]
 
 		for _, msg := range stdExitCodeMsgList {

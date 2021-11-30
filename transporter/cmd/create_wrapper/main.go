@@ -37,12 +37,21 @@ func main() {
 		false,
 		"if create type is file, truncat exist file")
 
+	isDebug := flag.Bool(
+		"debug",
+		false,
+		"enable debug mode")
+
 	flag.Parse()
 
 	// set output of standard logger to stderr
 	log.SetOutput(os.Stderr)
 	log.Println("[createWrapper-Info]New create request, relative path:", *relativePath,
-		"mount point:", *mountPath, "type:", *typeCreate, "isOverWrite:", *isOverWrite)
+		"mount point:", *mountPath,
+		"type:", *typeCreate,
+		"isOverWrite:", *isOverWrite,
+		"isDebug:", *isDebug,
+	)
 	log.Println("[createWrapper-Info]Start check")
 
 	log.Println("[createWrapper-Info]Start check path format")
@@ -50,6 +59,7 @@ func main() {
 		isPathAvailable bool
 		path            string
 		err             error
+		exitCode        int
 	)
 
 	isPathAvailable = filesystem.CheckDirPathFormat(*mountPath)
@@ -86,13 +96,17 @@ func main() {
 	}
 	log.Println("[createWrapper-Info]Check path format...OK")
 
-	log.Println("[createWrapper-Info]Start check mount filesystem")
-	err = filesystem.IsMountPath(*mountPath)
-	if err != nil {
-		log.Println("[createWrapper-Error]Failed to check mount filesystem, err:", err.Error())
-		filesystem.Exit(err)
+	if !(*isDebug) {
+		log.Println("[createWrapper-Info]Start check mount filesystem")
+		err = filesystem.IsMountPath(*mountPath)
+		if err != nil {
+			log.Println("[createWrapper-Error]Failed to check mount filesystem, err:", err.Error())
+			exitCode = exit_code.ExitCodeConvertWithErr(err)
+			os.Exit(exitCode)
+		}
+		log.Println("[createWrapper-Info]Check mount filesystem...OK")
 	}
-	log.Println("[createWrapper-Info]Check mount filesystem...OK")
+
 	log.Println("[createWrapper-Info]End check")
 
 	log.Println("[createWrapper-Info]Start create")
@@ -110,7 +124,8 @@ func main() {
 
 	if err != nil {
 		log.Println("[createWrapper-Error]Failed to create path:", path, "and err:", err.Error())
-		filesystem.Exit(err)
+		exitCode = exit_code.ExitCodeConvertWithErr(err)
+		os.Exit(exitCode)
 	}
 
 	log.Println("[createWrapper-Info]End create")

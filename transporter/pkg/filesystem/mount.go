@@ -105,6 +105,10 @@ func AbsolutePath(mountPoint, relativePath string) (string, error) {
 		return mountPoint, nil
 	}
 
+	if relativePath == slashStr {
+		return mountPoint, nil
+	}
+
 	if relativePath[0] == slash {
 		relativePath = relativePath[1:]
 	}

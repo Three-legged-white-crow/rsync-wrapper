@@ -38,13 +38,20 @@ func main() {
 		typeAll,
 		"stat type: file,dir,all")
 
+	isDebug := flag.Bool(
+		"debug",
+		false,
+		"enable debug mode")
+
 	flag.Parse()
 
 	// set output of standard logger to stderr
 	log.SetOutput(os.Stderr)
 	log.Println("[statWrapper-Info]New stat request, relativePath:", *relativePath,
 		"mountPath:", *mountPath,
-		"type:", *typeStat)
+		"type:", *typeStat,
+		"isDebug:", *isDebug,
+	)
 	log.Println("[statWrapper-Info]Start check")
 
 	log.Println("[statWrapper-Info]Start check path format")
@@ -52,6 +59,7 @@ func main() {
 		isPathAvailable bool
 		path            string
 		err             error
+		exitCode        int
 	)
 
 	isPathAvailable = filesystem.CheckDirPathFormat(*mountPath)
@@ -88,13 +96,18 @@ func main() {
 		os.Exit(exit_code.ErrInvalidArgument)
 	}
 	log.Println("[statWrapper-Info]Check path format...OK")
-	log.Println("[statWrapper-Info]Start check mount filesystem")
-	err = filesystem.IsMountPath(*mountPath)
-	if err != nil {
-		log.Println("[statWrapper-Error]Failed to check mount filesystem, err:", err.Error())
-		filesystem.Exit(err)
+
+	if !(*isDebug) {
+		log.Println("[statWrapper-Info]Start check mount filesystem")
+		err = filesystem.IsMountPath(*mountPath)
+		if err != nil {
+			log.Println("[statWrapper-Error]Failed to check mount filesystem, err:", err.Error())
+			exitCode = exit_code.ExitCodeConvertWithErr(err)
+			os.Exit(exitCode)
+		}
+		log.Println("[statWrapper-Info]Check mount filesystem...OK")
 	}
-	log.Println("[statWrapper-Info]Check mount filesystem...OK")
+
 	log.Println("[statWrapper-Info]End check")
 
 	var (
@@ -150,7 +163,8 @@ func main() {
 
 		if !errors.Is(err, fs.ErrNotExist) {
 			log.Println("[statWrapper-Error]Failed to stat path:", path, "and err:", err.Error())
-			filesystem.Exit(err)
+			exitCode = exit_code.ExitCodeConvertWithErr(err)
+			os.Exit(exitCode)
 		}
 
 		retryNum += 1

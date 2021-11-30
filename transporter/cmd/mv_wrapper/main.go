@@ -17,6 +17,7 @@ import (
 const (
 	emptyValue         = "empty"
 	slash              = '/'
+	slashStr           = "/"
 	defaultLimtReadDir = 100
 	waitNFSCliUpdate   = 5
 	waitNFSCcliLimit   = 5
@@ -49,6 +50,11 @@ func main() {
 		false,
 		"exclude src dir(src must is dir)")
 
+	isDebug := flag.Bool(
+		"debug",
+		false,
+		"enable debug mode")
+
 	flag.Parse()
 
 	// set output of standard logger to stderr
@@ -58,7 +64,9 @@ func main() {
 		"destRelativePath:", *destRelativePath,
 		"srcMountPath:", *srcMountPath,
 		"destMountPath:", *destMountPath,
-		"isExcludeSrcDir", *isExcludeSrcDir)
+		"isExcludeSrcDir", *isExcludeSrcDir,
+		"isDebug:", *isDebug,
+	)
 	log.Println("[mvWrapper-Info]Start check")
 
 	log.Println("[mvWrapper-Info]Start check format")
@@ -118,6 +126,27 @@ func main() {
 	}
 	log.Println("[mvWrapper-Info]Check path format...OK")
 
+	var exitCode int
+	if !(*isDebug) {
+		log.Println("[mvWrapper-Info]Start check src mount filesystem")
+		err = filesystem.IsMountPath(*srcMountPath)
+		if err != nil {
+			log.Println("[mvWrapper-Error]Failed to check src mount filesystem, err:", err.Error())
+			exitCode = exit_code.ExitCodeConvertWithErr(err)
+			os.Exit(exitCode)
+		}
+		log.Println("[mvWrapper-Info]Check src mount filesystem...OK")
+
+		log.Println("[mvWrapper-Info]Start check dest mount filesystem")
+		err = filesystem.IsMountPath(*destMountPath)
+		if err != nil {
+			log.Println("[mvWrapper-Error]Failed to check dest mount filesystem, err:", err.Error())
+			exitCode = exit_code.ExitCodeConvertWithErr(err)
+			os.Exit(exitCode)
+		}
+		log.Println("[mvWrapper-Info]Check dest mount filesystem...OK")
+	}
+
 	// sleep and retry avoid NFS client cache not update
 	var (
 		srcInfo     os.FileInfo
@@ -140,19 +169,13 @@ func main() {
 		if !errors.Is(err, fs.ErrNotExist) {
 			log.Println("[mvWrapper-Error]Failed to stat src path:", srcPath1,
 				"and err:", err.Error())
-			filesystem.Exit(err)
+			exitCode = exit_code.ExitCodeConvertWithErr(err)
+			os.Exit(exitCode)
 		}
 
 		srcRetryNum += 1
 	}
 	log.Println("[mvWrapper-Info]Check src path is exist...Exist")
-	log.Println("[mvWrapper-Info]Start check src mount filesystem")
-	err = filesystem.IsMountPath(*srcMountPath)
-	if err != nil {
-		log.Println("[mvWrapper-Error]Failed to check src mount filesystem, err:", err.Error())
-		filesystem.Exit(err)
-	}
-	log.Println("[mvWrapper-Info]Check src mount filesystem...OK")
 
 	var (
 		isDestExist  bool = false
@@ -177,19 +200,13 @@ func main() {
 
 		if !errors.Is(err, fs.ErrNotExist) {
 			log.Println("[mvWrapper]Failed to stat dest path:", destPath, "and err:", err.Error())
-			filesystem.Exit(err)
+			exitCode = exit_code.ExitCodeConvertWithErr(err)
+			os.Exit(exitCode)
 		}
 
 		destRetryNum += 1
 	}
 
-	log.Println("[mvWrapper-Info]Start check dest mount filesystem")
-	err = filesystem.IsMountPath(*destMountPath)
-	if err != nil {
-		log.Println("[mvWrapper-Error]Failed to check dest mount filesystem, err:", err.Error())
-		filesystem.Exit(err)
-	}
-	log.Println("[mvWrapper-Info]Check dest mount filesystem...OK")
 	log.Println("[mvWrapper-Info]End check")
 	log.Println("[mvWrapper-Info]Start move")
 	/*
@@ -224,6 +241,41 @@ func main() {
 
 	// src is dir
 	if srcInfo.IsDir() {
+		// case: mv /home/dir /home/dir
+		var destPath1 string = destPath
+		destLen := len(destPath1)
+		if destLen > 1 {
+			if destPath1[destLen-1] == slash {
+				destPath1 = destPath1[:destLen-1]
+			}
+		}
+
+		if !(*isExcludeSrcDir) && (srcPath1 == destPath1) {
+			log.Println("[mvWrapper-Error]Cannot copy a directory into itself, dir:",
+				srcPath1)
+			os.Exit(exit_code.ErrDirectoryNestedItself)
+		}
+
+		// case: mv /home/dir/* /home/dir/
+		if *isExcludeSrcDir && (srcPath1 == destPath1) {
+			log.Println(
+				"[mvWrapper-Error]The source and destination are the same file, parent dir:",
+				srcPath1)
+			os.Exit(exit_code.ErrSrcAndDstAreSameFile)
+		}
+
+		// case: mv /home/dir /home
+		var destPath2 string = destPath
+		destLen2 := len(destPath2)
+		if destPath2[destLen2-1] != slash {
+			destPath2 += slashStr
+		}
+		if !(*isExcludeSrcDir) && (srcPath1 == destPath2 + srcInfo.Name()) {
+			log.Println(
+				"[mvWrapper-Error]The source and destination are the same file:", srcPath1)
+			os.Exit(exit_code.ErrSrcAndDstAreSameFile)
+		}
+
 		// case: mv src/* dest
 		if *isExcludeSrcDir {
 
@@ -259,7 +311,8 @@ func main() {
 					"[mvWrapper-Error]Failed to open src dir:", srcPath1,
 					", isExcludeSrcDir:", *isExcludeSrcDir,
 					"and err:", err.Error())
-				filesystem.Exit(err)
+				exitCode = exit_code.ExitCodeConvertWithErr(err)
+				os.Exit(exitCode)
 			}
 			defer sf.Close()
 
@@ -282,7 +335,8 @@ func main() {
 						", isExcludeSrcDir:", *isExcludeSrcDir,
 						"and err:", err.Error())
 
-					filesystem.Exit(err)
+					exitCode = exit_code.ExitCodeConvertWithErr(err)
+					os.Exit(exitCode)
 				}
 
 				for _, name := range nameList {
@@ -301,7 +355,8 @@ func main() {
 							"[mvWrapper-Error]Failed to stat new file:", newFilePath,
 							", isExcludeSrcDir:", *isExcludeSrcDir,
 							"and err:", err.Error())
-						filesystem.Exit(err)
+						exitCode = exit_code.ExitCodeConvertWithErr(err)
+						os.Exit(exitCode)
 					}
 					// new file is not exit, allow rename
 					oldFilePath = srcDirPath + name
@@ -311,18 +366,12 @@ func main() {
 							"to new file:", newFilePath,
 							", isExcludeSrcDir:", *isExcludeSrcDir,
 							"and err:", err.Error())
-						filesystem.Exit(err)
+						exitCode = exit_code.ExitCodeConvertWithErr(err)
+						os.Exit(exitCode)
 					}
 				}
 			}
 			log.Println("[mvWrapper-Info]Rename end, src is dir and exclude src dir:", srcPath1)
-
-			err = os.RemoveAll(srcPath1)
-			if err != nil {
-				log.Println("[mvWrapper-Wraning]Failed to remove empty src dir:", srcPath1)
-			}else {
-				log.Println("[mvWrapper-Info]Succeed to remove empty src dir:", srcPath1)
-			}
 
 		}else {
 			if !isDestExist || destInfo == nil {
@@ -336,7 +385,8 @@ func main() {
 						"isExcludeSrcDir:", *isExcludeSrcDir,
 						"and err:", err.Error())
 
-					filesystem.Exit(err)
+					exitCode = exit_code.ExitCodeConvertWithErr(err)
+					os.Exit(exitCode)
 				}
 				log.Println("[mvWrapper-Info]Rename end, src is dir:",srcPath1,
 					"and include src dir, dest is not exist:", destPath)
@@ -362,7 +412,8 @@ func main() {
 						"isExcludeSrcDir:", *isExcludeSrcDir,
 						"and err:", err.Error())
 
-					filesystem.Exit(err)
+					exitCode = exit_code.ExitCodeConvertWithErr(err)
+					os.Exit(exitCode)
 				}
 				log.Println("[mvWrapper-Info]Rename end, src is dir:", srcPath1,
 					"and include src dir, dest already exist, new path:", newFilePath)
@@ -380,12 +431,19 @@ func main() {
 					"[mvWrapper-Error]Failed to rename src file:", srcPath1,
 					"to not exist dest file:", destPath,
 					"and err:", err.Error())
-				filesystem.Exit(err)
+				exitCode = exit_code.ExitCodeConvertWithErr(err)
+				os.Exit(exitCode)
 			}
 			log.Println("[mvWrapper-Info]Rename end, src is file:", srcPath1,
 				"dest is not exist:", destPath)
 
 		}else {
+			// case: mv /home/dir/file /home/dir/file
+			if srcPath1 == destPath {
+				log.Println("[mvWrapper-Error]The source and destination are the same file, file:", srcPath1)
+				os.Exit(exit_code.ErrSrcAndDstAreSameFile)
+			}
+
 			// src is file but dest is a exist file -> EEXIST
 			if !destInfo.IsDir() {
 				log.Println("[mvWrapper-Error]Src is file:", srcPath1,
@@ -416,7 +474,8 @@ func main() {
 				log.Println("[mvWrapper-Error]Failed to rename src file:", srcPath1,
 					"to new file:", newFilePath,
 					"and err:", err.Error())
-				filesystem.Exit(err)
+				exitCode = exit_code.ExitCodeConvertWithErr(err)
+				os.Exit(exitCode)
 			}
 			log.Println("[mvWrapper-Info]Rename end, src is file:", srcPath1,
 				"dest is exist dir, new file:", newFilePath)

@@ -1,6 +1,7 @@
 package dir
 
 import (
+	"bytes"
 	"context"
 	"log"
 	"os/exec"
@@ -58,7 +59,7 @@ func Run(req ReqRun) int {
 			return curExitCode
 		}
 
-		res = runRsync(req.SrcPath, req.DestPath, req.ReportAddr, req.IsReportProgress, req.IsReportStderr, req.ReportClient, req.ReportInterval)
+		res = runRsync(req.SrcPath, req.DestPath, req.ReportAddr, req.IsReportProgress, req.ReportClient, req.ReportInterval)
 		if res.exitCode == rsync_wrapper.ErrOK {
 			log.Println(exit_code.ErrMsgSucceed)
 			log.Println("[Complete]process exit code:", res.exitCode, "exit reason:", res.exitReason)
@@ -67,6 +68,7 @@ func Run(req ReqRun) int {
 
 		// if stderr of result is not nil, try get std exit code according std eror desc
 		if len(res.stdErr) != 0 {
+			log.Println("[copy-Warning]Stderr is not empty:", res.stdErr)
 
 			// last exec, if exit with ErrVanished, retry command.
 			// if rsync exited because file vanished, not count retry num.
@@ -81,6 +83,8 @@ func Run(req ReqRun) int {
 				finalExitCode = exitCodeStderr
 				isExitDirect = true
 			}
+		}else {
+			log.Println("[copy-Warning]Stderr is empty")
 		}
 
 		if isExitDirect {
@@ -108,6 +112,7 @@ func Run(req ReqRun) int {
 		currentRetryNum += 1
 		log.Println("[Retry]process count:", currentRetryNum)
 		log.Println("[Retry]process exit code:", res.exitCode, "exit reason:", res.exitReason, "stderr:", res.stdErr)
+		log.Println("[Retry]---------------------------------------------------------------------------------------")
 	}
 }
 
@@ -118,12 +123,9 @@ type resultRsync struct {
 }
 
 // runRsync run rsync command and get stdout and stderr.
-func runRsync(src, dest, addr string, isReportProgress, isReportStderr bool, rc *client.ReportClient, reportInterval int) resultRsync {
-	var res = resultRsync{
-		exitCode:   rsync_wrapper.ErrOK,
-		exitReason: rsync_wrapper.ErrOKMsg,
-		stdErr:     "",
-	}
+func runRsync(src, dest, addr string, isReportProgress bool, rc *client.ReportClient, reportInterval int) (res resultRsync) {
+	res.exitCode = rsync_wrapper.ErrOK
+	res.exitReason = rsync_wrapper.ErrOKMsg
 
 	var c *exec.Cmd
 
@@ -165,24 +167,12 @@ func runRsync(src, dest, addr string, isReportProgress, isReportStderr bool, rc 
 
 	// because of get exit code from stderr, so always read stderr
 	log.Println("[copy-Info]read stderr of cmd turn on")
-	stderrPipe, err := c.StderrPipe()
-	if err != nil {
-		res.exitCode = rsync_wrapper.ErrCreatePipe
-		res.exitReason = err.Error()
-		return res
-	}
+	var stderrBuf bytes.Buffer
+	c.Stderr = &stderrBuf
 
-	// collect stderr content of specified process
-	processStdErrChan := make(chan string, 1)
-	defer func(c <-chan string) {
-		stdErrInfo := <-c
-		res.stdErr = stdErrInfo
-		log.Println("[copy-Info]succeed to get stderrinfo from stderr reader")
-	}(processStdErrChan)
-
-	ctx, cancelStderrFunc := context.WithCancel(context.Background())
-	defer cancelStderrFunc()
-	go readStderr(ctx, stderrPipe, processStdErrChan)
+	defer func() {
+		res.stdErr = stderrBuf.String()
+	}()
 
 	errStart := c.Start()
 	if errStart != nil {
