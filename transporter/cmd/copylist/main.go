@@ -374,13 +374,13 @@ func main() {
 		recordBuilder  strings.Builder
 		recordErrStr   string
 		recordContent  recordInfo
-		firstExitCode  int = exit_code.Empty
-		numRecord      int
-		numErrRecord   int
-		numIgSrcDir    int
-		numIgSrcNOENT  int
-		numIgDestDir   int
-		numOverWrite   int
+		// firstExitCode  int = exit_code.Empty
+		numRecord     int
+		numErrRecord  int
+		numIgSrcDir   int
+		numIgSrcNOENT int
+		numIgDestDir  int
+		numOverWrite  int
 	)
 
 	outputWriter = bufio.NewWriter(outputF)
@@ -418,9 +418,9 @@ func main() {
 			recordBuilder.WriteString("\n")
 			recordErrStr = recordBuilder.String()
 			_, _ = outputWriter.WriteString(recordErrStr)
-			if firstExitCode == exit_code.Empty {
-				firstExitCode = exit_code.ErrInvalidListFile
-			}
+			// if firstExitCode == exit_code.Empty {
+			// 	firstExitCode = exit_code.ErrInvalidListFile
+			// }
 			continue
 		}
 		srcPath, _ = filesystem.AbsolutePath(*srcMountPath, recordContent.srcRelativeCleanPath)
@@ -447,9 +447,9 @@ func main() {
 			recordBuilder.WriteString("\n")
 			recordErrStr = recordBuilder.String()
 			_, _ = outputWriter.WriteString(recordErrStr)
-			if firstExitCode == exit_code.Empty {
-				firstExitCode = exit_code.ErrInvalidArgument
-			}
+			// if firstExitCode == exit_code.Empty {
+			// 	firstExitCode = exit_code.ErrInvalidArgument
+			// }
 			continue
 		}
 		isPathAvailable = filesystem.CheckFilePathFormat(destPath)
@@ -466,9 +466,9 @@ func main() {
 			recordBuilder.WriteString("\n")
 			recordErrStr = recordBuilder.String()
 			_, _ = outputWriter.WriteString(recordErrStr)
-			if firstExitCode == exit_code.Empty {
-				firstExitCode = exit_code.ErrInvalidArgument
-			}
+			// if firstExitCode == exit_code.Empty {
+			// 	firstExitCode = exit_code.ErrInvalidArgument
+			// }
 			continue
 		}
 
@@ -493,9 +493,9 @@ func main() {
 				recordBuilder.WriteString("\n")
 				recordErrStr = recordBuilder.String()
 				_, _ = outputWriter.WriteString(recordErrStr)
-				if firstExitCode == exit_code.Empty {
-					firstExitCode = exitCode
-				}
+				// if firstExitCode == exit_code.Empty {
+				// 	firstExitCode = exitCode
+				// }
 				continue
 			}
 
@@ -511,9 +511,9 @@ func main() {
 				recordBuilder.WriteString("\n")
 				recordErrStr = recordBuilder.String()
 				_, _ = outputWriter.WriteString(recordErrStr)
-				if firstExitCode == exit_code.Empty {
-					firstExitCode = exit_code.ErrNoSuchFileOrDir
-				}
+				// if firstExitCode == exit_code.Empty {
+				// 	firstExitCode = exit_code.ErrNoSuchFileOrDir
+				// }
 			} else {
 				numIgSrcNOENT += 1
 			}
@@ -535,9 +535,9 @@ func main() {
 				recordBuilder.WriteString("\n")
 				recordErrStr = recordBuilder.String()
 				_, _ = outputWriter.WriteString(recordErrStr)
-				if firstExitCode == exit_code.Empty {
-					firstExitCode = exit_code.ErrIsDirectory
-				}
+				// if firstExitCode == exit_code.Empty {
+				// 	firstExitCode = exit_code.ErrIsDirectory
+				// }
 			} else {
 				numIgSrcDir += 1
 			}
@@ -558,9 +558,9 @@ func main() {
 			recordBuilder.WriteString("\n")
 			recordErrStr = recordBuilder.String()
 			_, _ = outputWriter.WriteString(recordErrStr)
-			if firstExitCode == exit_code.Empty {
-				firstExitCode = exit_code.ErrSrcAndDstAreSameFile
-			}
+			// if firstExitCode == exit_code.Empty {
+			// 	firstExitCode = exit_code.ErrSrcAndDstAreSameFile
+			// }
 			continue
 		}
 
@@ -581,9 +581,9 @@ func main() {
 					recordBuilder.WriteString("\n")
 					recordErrStr = recordBuilder.String()
 					_, _ = outputWriter.WriteString(recordErrStr)
-					if firstExitCode == exit_code.Empty {
-						firstExitCode = exit_code.ErrIsDirectory
-					}
+					// if firstExitCode == exit_code.Empty {
+					// 	firstExitCode = exit_code.ErrIsDirectory
+					// }
 				} else {
 					numIgDestDir += 1
 				}
@@ -604,9 +604,9 @@ func main() {
 				recordBuilder.WriteString("\n")
 				recordErrStr = recordBuilder.String()
 				_, _ = outputWriter.WriteString(recordErrStr)
-				if firstExitCode == exit_code.Empty {
-					firstExitCode = exit_code.ErrFileIsExists
-				}
+				// if firstExitCode == exit_code.Empty {
+				// 	firstExitCode = exit_code.ErrFileIsExists
+				// }
 				continue
 			} else {
 				numOverWrite += 1
@@ -632,9 +632,9 @@ func main() {
 				recordBuilder.WriteString("\n")
 				recordErrStr = recordBuilder.String()
 				_, _ = outputWriter.WriteString(recordErrStr)
-				if firstExitCode == exit_code.Empty {
-					firstExitCode = exitCode
-				}
+				// if firstExitCode == exit_code.Empty {
+				// 	firstExitCode = exitCode
+				// }
 				continue
 			}
 
@@ -658,9 +658,9 @@ func main() {
 				recordBuilder.WriteString("\n")
 				recordErrStr = recordBuilder.String()
 				_, _ = outputWriter.WriteString(recordErrStr)
-				if firstExitCode == exit_code.Empty {
-					firstExitCode = exitCode
-				}
+				// if firstExitCode == exit_code.Empty {
+				// 	firstExitCode = exitCode
+				// }
 				continue
 			}
 
@@ -697,9 +697,9 @@ func main() {
 			recordBuilder.WriteString("\n")
 			recordErrStr = recordBuilder.String()
 			_, _ = outputWriter.WriteString(recordErrStr)
-			if firstExitCode == exit_code.Empty {
-				firstExitCode = exitCode
-			}
+			// if firstExitCode == exit_code.Empty {
+			// 	firstExitCode = exitCode
+			// }
 			continue
 		}
 
@@ -723,9 +723,9 @@ func main() {
 			recordBuilder.WriteString("\n")
 			recordErrStr = recordBuilder.String()
 			_, _ = outputWriter.WriteString(recordErrStr)
-			if firstExitCode == exit_code.Empty {
-				firstExitCode = exitCode
-			}
+			// if firstExitCode == exit_code.Empty {
+			// 	firstExitCode = exitCode
+			// }
 			continue
 		}
 
@@ -753,9 +753,9 @@ func main() {
 					recordBuilder.WriteString("\n")
 					recordErrStr = recordBuilder.String()
 					_, _ = outputWriter.WriteString(recordErrStr)
-					if firstExitCode == exit_code.Empty {
-						firstExitCode = exitCode
-					}
+					// if firstExitCode == exit_code.Empty {
+					// 	firstExitCode = exitCode
+					// }
 					continue
 				}
 
@@ -780,9 +780,9 @@ func main() {
 					recordBuilder.WriteString("\n")
 					recordErrStr = recordBuilder.String()
 					_, _ = outputWriter.WriteString(recordErrStr)
-					if firstExitCode == exit_code.Empty {
-						firstExitCode = exitCode
-					}
+					// if firstExitCode == exit_code.Empty {
+					// 	firstExitCode = exitCode
+					// }
 					continue
 				}
 
@@ -803,9 +803,9 @@ func main() {
 					recordBuilder.WriteString("\n")
 					recordErrStr = recordBuilder.String()
 					_, _ = outputWriter.WriteString(recordErrStr)
-					if firstExitCode == exit_code.Empty {
-						firstExitCode = exit_code.ErrChecksumRefuse
-					}
+					// if firstExitCode == exit_code.Empty {
+					// 	firstExitCode = exit_code.ErrChecksumRefuse
+					// }
 					continue
 				}
 
@@ -873,15 +873,15 @@ func main() {
 		"ignore src not exist:", numIgSrcNOENT,
 		"ignore dest is dir:", numIgDestDir,
 		"overWrite:", numOverWrite)
-	if numRecord == numErrRecord {
-		if firstExitCode != exit_code.Empty {
-			log.Println("[copylist-Error]All records get err, exit with first err:", firstExitCode)
-			os.Exit(firstExitCode)
-		}
-
-		log.Println("[copylist-Info]All records get err, but all ignore, exit with 0")
-		os.Exit(exit_code.Succeed)
-	}
+	// if numRecord == numErrRecord {
+	// 	if firstExitCode != exit_code.Empty {
+	// 		log.Println("[copylist-Error]All records get err, exit with first err:", firstExitCode)
+	// 		os.Exit(firstExitCode)
+	// 	}
+	//
+	// 	log.Println("[copylist-Info]All records get err, but all ignore, exit with 0")
+	// 	os.Exit(exit_code.Succeed)
+	// }
 
 	if isRecordErr {
 		log.Println("[copylist-Error]Some records get err, exit with",
