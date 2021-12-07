@@ -18,7 +18,7 @@ const (
 	emptyValue         = "empty"
 	slash              = '/'
 	slashStr           = "/"
-	defaultLimtReadDir = 100
+	defaultLimtReadDir = 1024
 	waitNFSCliUpdate   = 5
 	waitNFSCcliLimit   = 5
 )
@@ -103,7 +103,6 @@ func main() {
 	// not need check err, because format of mount point has already been checked above
 	srcPath, _ = filesystem.AbsolutePath(*srcMountPath, *srcRelativePath)
 	destPath, _ = filesystem.AbsolutePath(*destMountPath, *destRelativePath)
-
 
 	var srcPath1 string = srcPath
 	srcLen := len(srcPath1)
@@ -237,7 +236,7 @@ func main() {
 						- if new file exist in dest dir -> EEXIST;
 						- if new file not exist -> rename(src, dest/src);
 
-	 */
+	*/
 
 	// src is dir
 	if srcInfo.IsDir() {
@@ -270,7 +269,7 @@ func main() {
 		if destPath2[destLen2-1] != slash {
 			destPath2 += slashStr
 		}
-		if !(*isExcludeSrcDir) && (srcPath1 == destPath2 + srcInfo.Name()) {
+		if !(*isExcludeSrcDir) && (srcPath1 == destPath2+srcInfo.Name()) {
 			log.Println(
 				"[mvWrapper-Error]The source and destination are the same file:", srcPath1)
 			os.Exit(exit_code.ErrSrcAndDstAreSameFile)
@@ -295,7 +294,7 @@ func main() {
 			}
 
 			var (
-				srcDirPath string = srcPath1 + "/"
+				srcDirPath  string = srcPath1 + "/"
 				destDirPath string = destPath
 			)
 			if destDirPath[len(destDirPath)-1] != slash {
@@ -304,76 +303,16 @@ func main() {
 
 			log.Println("[mvWrapper-Info]Rename start, src is dir and exclude src dir:", srcPath1)
 			log.Println("[mvWrapper-Info]Start read names of src dir")
-			var sf *os.File
-			sf, err = os.Open(srcPath1)
+			err = renameChild(srcDirPath, destDirPath)
 			if err != nil {
-				log.Println(
-					"[mvWrapper-Error]Failed to open src dir:", srcPath1,
-					", isExcludeSrcDir:", *isExcludeSrcDir,
-					"and err:", err.Error())
+				log.Println("[mvWrapper-Error]Failed to rename file from src dir:", srcDirPath,
+					"to dest dir:", destDirPath, "and err:", err.Error())
 				exitCode = exit_code.ExitCodeConvertWithErr(err)
 				os.Exit(exitCode)
 			}
-			defer sf.Close()
-
-			var (
-				nameList []string
-				oldFilePath  string
-				newFilePath string
-			)
-			for {
-				nameList, err = sf.Readdirnames(defaultLimtReadDir)
-				if err != nil {
-					if errors.Is(err, io.EOF) {
-						log.Println(
-							"[mvWrapper-Info]Get EOF when read dir name list of src dir:", srcPath1,
-							", isExcludeSrcDir:", *isExcludeSrcDir)
-						break
-					}
-					log.Println(
-						"[mvWrapper-Error]Failed to read name list of src dir:", srcPath1,
-						", isExcludeSrcDir:", *isExcludeSrcDir,
-						"and err:", err.Error())
-
-					exitCode = exit_code.ExitCodeConvertWithErr(err)
-					os.Exit(exitCode)
-				}
-
-				for _, name := range nameList {
-					newFilePath = destDirPath + name
-					_, err = os.Stat(newFilePath)
-					if err == nil {
-						// new file is exist
-						log.Println("[mvWrapper-Error]New file:", newFilePath,
-							"is already exist at dest dir:", destDirPath)
-						os.Exit(exit_code.ErrFileIsExists)
-					}
-
-					// get err when stat new file
-					if !errors.Is(err, fs.ErrNotExist) {
-						log.Println(
-							"[mvWrapper-Error]Failed to stat new file:", newFilePath,
-							", isExcludeSrcDir:", *isExcludeSrcDir,
-							"and err:", err.Error())
-						exitCode = exit_code.ExitCodeConvertWithErr(err)
-						os.Exit(exitCode)
-					}
-					// new file is not exit, allow rename
-					oldFilePath = srcDirPath + name
-					err = os.Rename(oldFilePath, newFilePath)
-					if err != nil {
-						log.Println("[mvWrapper-Error]Failed to rename old file:", oldFilePath,
-							"to new file:", newFilePath,
-							", isExcludeSrcDir:", *isExcludeSrcDir,
-							"and err:", err.Error())
-						exitCode = exit_code.ExitCodeConvertWithErr(err)
-						os.Exit(exitCode)
-					}
-				}
-			}
 			log.Println("[mvWrapper-Info]Rename end, src is dir and exclude src dir:", srcPath1)
 
-		}else {
+		} else {
 			if !isDestExist || destInfo == nil {
 				log.Println("[mvWrapper-Info]Rename start, src is dir:", srcPath1,
 					"and include src dir, dest is not exist:", destPath)
@@ -388,9 +327,9 @@ func main() {
 					exitCode = exit_code.ExitCodeConvertWithErr(err)
 					os.Exit(exitCode)
 				}
-				log.Println("[mvWrapper-Info]Rename end, src is dir:",srcPath1,
+				log.Println("[mvWrapper-Info]Rename end, src is dir:", srcPath1,
 					"and include src dir, dest is not exist:", destPath)
-			}else {
+			} else {
 				if !destInfo.IsDir() {
 					log.Println("[mvWrapper-Error]Src is dir and include src dir, but dest is a exist file")
 					os.Exit(exit_code.ErrNotDirectory)
@@ -420,7 +359,7 @@ func main() {
 			}
 		}
 
-	}else {
+	} else {
 		// src is file and dest is not exist
 		if !isDestExist || destInfo == nil {
 			log.Println("[mvWrapper-Info]Rename start, src is file:", srcPath1,
@@ -437,7 +376,7 @@ func main() {
 			log.Println("[mvWrapper-Info]Rename end, src is file:", srcPath1,
 				"dest is not exist:", destPath)
 
-		}else {
+		} else {
 			// case: mv /home/dir/file /home/dir/file
 			if srcPath1 == destPath {
 				log.Println("[mvWrapper-Error]The source and destination are the same file, file:", srcPath1)
@@ -487,4 +426,87 @@ func main() {
 		"to dest:", destPath,
 		"isExcludeSrcDir", *isExcludeSrcDir)
 	os.Exit(exit_code.Succeed)
+}
+
+func renameChild(srcDir, destDir string) error {
+	if len(srcDir) == 0 || len(destDir) == 0 {
+		return fs.ErrNotExist
+	}
+
+	srcDirLen := len(srcDir)
+	if srcDir[srcDirLen-1] != slash {
+		srcDir += slashStr
+	}
+
+	destDirLen := len(destDir)
+	if destDir[destDirLen-1] != slash {
+		destDir += slashStr
+	}
+
+	var (
+		respSize     int
+		srcDirF      *os.File
+		err          error
+		nameList     []string
+		childname    string
+		childOldPath string
+		childNewPath string
+	)
+
+	for {
+		srcDirF, err = os.Open(srcDir)
+		if err != nil {
+			log.Println("[mvWrapper-Error]Failed to open src dir:", srcDir, "and err:", err.Error())
+			return err
+		}
+
+		nameList, err = srcDirF.Readdirnames(defaultLimtReadDir)
+		if err != nil {
+			_ = srcDirF.Close()
+
+			if errors.Is(err, io.EOF) {
+				return nil
+			}
+
+			log.Println("[mvWrapper-Error]Failed to readdirnames of path:", srcDir, "and err:", err.Error())
+			return err
+		}
+
+		respSize = len(nameList)
+		for _, childname = range nameList {
+			childNewPath = destDir + childname
+			_, err = os.Stat(childNewPath)
+			if err == nil {
+				log.Println("[mvWrapper-Error]Path is exist:", childNewPath)
+				return fs.ErrExist
+			}
+
+			if !errors.Is(err, fs.ErrNotExist) {
+				log.Println("[mvWrapper-Error]Failed to stat path:", childNewPath, "and err:", err.Error())
+				return err
+			}
+
+			childOldPath = srcDir + childname
+			err = os.Rename(childOldPath, childNewPath)
+			if err != nil {
+				log.Println("[mvWrapper-Error]Failed to rename from old:", childOldPath,
+					"to new:", childNewPath, "and err:", err.Error())
+				return err
+			}
+		}
+
+		// Removing files from the directory may have caused
+		// the OS to reshuffle it. Simply calling Readdirnames
+		// again may skip some entries. The only reliable way
+		// to avoid this is to close and re-open the
+		// directory. See issue 20841.
+		_ = srcDirF.Close()
+
+		// Finish when the end of the directory is reached
+		if respSize < defaultLimtReadDir {
+			break
+		}
+	}
+
+	return nil
 }

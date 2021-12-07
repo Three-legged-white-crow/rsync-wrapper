@@ -1,3 +1,4 @@
+//go:build amd64 && linux
 // +build amd64,linux
 
 package exit_code
@@ -56,6 +57,7 @@ const (
 	ErrCopylistPartial       = 252
 	ErrCopyFileSucceed       = 254
 	ErrSystem                = 255
+	Empty                    = -999
 )
 
 // custom msg
@@ -123,6 +125,10 @@ const (
 )
 
 func ExitCodeConvertWithErr(err error) int {
+	if err == nil {
+		return Succeed
+	}
+
 	if errors.Is(err, fs.ErrNotExist) {
 		return ErrNoSuchFileOrDir
 	}

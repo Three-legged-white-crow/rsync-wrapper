@@ -1,3 +1,4 @@
+//go:build amd64 && linux
 // +build amd64,linux
 
 package main
@@ -90,7 +91,7 @@ func main() {
 	if *fileSuffix == emptyValue {
 		isSuffixEmpty = true
 		log.Println("[copy-Info]Not specify file suffix")
-	}else {
+	} else {
 		suffixList = strings.Split(*fileSuffix, slashStr)
 	}
 
@@ -100,7 +101,6 @@ func main() {
 			"or relative path:", *relativePath)
 		os.Exit(exit_code.ErrInvalidArgument)
 	}
-
 
 	pathLen := len(path)
 	rmPath := path
@@ -170,7 +170,7 @@ func main() {
 					- remove dir -> create empty dir with same name;
 				- if not reserved dir:
 					- remove dir;
-	 */
+	*/
 
 	// rm path is file
 	if !pInfo.IsDir() {
@@ -215,13 +215,12 @@ func main() {
 	exitCode = exit_code.ExitCodeConvertWithErr(err)
 }
 
-
 func isNeedRemove(fileName string, fileSuffixList []string) bool {
 	if fileSuffixList == nil {
 		return false
 	}
 
-	var	isMatch bool
+	var isMatch bool
 	for _, suffix := range fileSuffixList {
 		isMatch, _ = filepath.Match(suffix, fileName)
 		if isMatch {
@@ -250,12 +249,13 @@ func removeChild(path string, isSuffixEmpty bool, suffixList []string) error {
 	}
 
 	var (
-		respSize int
-		dirF *os.File
-		err error
+		respSize  int
+		dirF      *os.File
+		err       error
 		nameList  []string
 		childname string
 		childPath string
+		removeErr error
 		numErr    int
 	)
 
@@ -272,14 +272,15 @@ func removeChild(path string, isSuffixEmpty bool, suffixList []string) error {
 		for {
 			numErr = 0
 			nameList, err = dirF.Readdirnames(reqSize)
-			if errors.Is(err, fs.ErrNotExist) {
-				dirF.Close()
-				return nil
-			}
 
 			if err != nil {
-				dirF.Close()
-				if err == io.EOF {
+				_ = dirF.Close()
+
+				if errors.Is(err, io.EOF) {
+					return nil
+				}
+
+				if errors.Is(err, fs.ErrNotExist) {
 					return nil
 				}
 
@@ -297,6 +298,9 @@ func removeChild(path string, isSuffixEmpty bool, suffixList []string) error {
 				childPath = path + childname
 				err = os.RemoveAll(childPath)
 				if err != nil {
+					if removeErr == nil {
+						removeErr = err
+					}
 					numErr += 1
 					log.Println(
 						"[rmWrapper-Warning]Failed to remove path:", childPath,
@@ -316,12 +320,16 @@ func removeChild(path string, isSuffixEmpty bool, suffixList []string) error {
 		// again may skip some entries. The only reliable way
 		// to avoid this is to close and re-open the
 		// directory. See issue 20841.
-		dirF.Close()
+		_ = dirF.Close()
 
 		// Finish when the end of the directory is reached
 		if respSize < reqSize {
 			break
 		}
+	}
+
+	if removeErr != nil {
+		return removeErr
 	}
 
 	return nil

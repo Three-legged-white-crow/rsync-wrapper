@@ -158,7 +158,7 @@ func main() {
 	if *fileSuffixForChecksum == emptyValue {
 		isChecksumSuffixEmpty = true
 		log.Println("[copylist-Info]Not specify checksum suffix, not checksum")
-	}else {
+	} else {
 		checksumFileSuffixList = strings.Split(*fileSuffixForChecksum, slashStr)
 	}
 
@@ -251,7 +251,7 @@ func main() {
 		- if record something to output file -> ErrCopylistPartial(252)
 		- if not record something to output file -> Succeed(0)
 
-	 */
+	*/
 
 	log.Println("[copylist-Info]Start check input record file is exist")
 
@@ -340,6 +340,16 @@ func main() {
 	}
 	inputReader.Reset(inputF)
 
+	// check or create output record file, if parent dir is not exist, create it
+	err = filesystem.CheckOrCreateFile(outRecordFilePath, true)
+	if err != nil {
+		log.Println("[copylist-Error]Failed to check or create output record file:", outRecordFilePath,
+			"and err:", err.Error())
+		_ = inputF.Close()
+		exitCode = exit_code.ExitCodeConvertWithErr(err)
+		os.Exit(exitCode)
+	}
+
 	var outputF *os.File
 	outputF, err = os.OpenFile(outRecordFilePath, unix.O_RDWR|unix.O_CREAT|unix.O_TRUNC|unix.O_APPEND, permFileDefault)
 	if err != nil {
@@ -351,19 +361,26 @@ func main() {
 	}
 
 	var (
-		isRecordErr       bool = false
-		outputWriter      *bufio.Writer
-		srcPath           string
-		destPath          string
-		srcPathInfo       os.FileInfo
-		destPathInfo      os.FileInfo
-		lastSlashIndex    int
-		destFileName      string
-		destParentDir     string
-		exitCodeStr       string
-		recordBuilder     strings.Builder
-		recordErrStr      string
-		recordContent     recordInfo
+		isRecordErr    bool = false
+		outputWriter   *bufio.Writer
+		srcPath        string
+		destPath       string
+		srcPathInfo    os.FileInfo
+		destPathInfo   os.FileInfo
+		lastSlashIndex int
+		destFileName   string
+		destParentDir  string
+		exitCodeStr    string
+		recordBuilder  strings.Builder
+		recordErrStr   string
+		recordContent  recordInfo
+		firstExitCode  int = exit_code.Empty
+		numRecord      int
+		numErrRecord   int
+		numIgSrcDir    int
+		numIgSrcNOENT  int
+		numIgDestDir   int
+		numOverWrite   int
 	)
 
 	outputWriter = bufio.NewWriter(outputF)
@@ -385,9 +402,11 @@ func main() {
 				"and get err:", err.Error())
 			break
 		}
+		numRecord += 1
 
 		recordContent, isRecordAvailable = cleanRecord(line)
 		if !isRecordAvailable {
+			numErrRecord += 1
 			isRecordErr = true
 			recordBuilder.Reset()
 			recordBuilder.WriteString(recordContent.srcRelativeDirtyPath)
@@ -399,6 +418,9 @@ func main() {
 			recordBuilder.WriteString("\n")
 			recordErrStr = recordBuilder.String()
 			_, _ = outputWriter.WriteString(recordErrStr)
+			if firstExitCode == exit_code.Empty {
+				firstExitCode = exit_code.ErrInvalidListFile
+			}
 			continue
 		}
 		srcPath, _ = filesystem.AbsolutePath(*srcMountPath, recordContent.srcRelativeCleanPath)
@@ -413,6 +435,7 @@ func main() {
 
 		isPathAvailable = filesystem.CheckFilePathFormat(srcPath)
 		if !isPathAvailable {
+			numErrRecord += 1
 			isRecordErr = true
 			recordBuilder.Reset()
 			recordBuilder.WriteString(recordContent.srcRelativeDirtyPath)
@@ -424,10 +447,14 @@ func main() {
 			recordBuilder.WriteString("\n")
 			recordErrStr = recordBuilder.String()
 			_, _ = outputWriter.WriteString(recordErrStr)
+			if firstExitCode == exit_code.Empty {
+				firstExitCode = exit_code.ErrInvalidArgument
+			}
 			continue
 		}
 		isPathAvailable = filesystem.CheckFilePathFormat(destPath)
 		if !isPathAvailable {
+			numErrRecord += 1
 			isRecordErr = true
 			recordBuilder.Reset()
 			recordBuilder.WriteString(recordContent.srcRelativeDirtyPath)
@@ -439,11 +466,16 @@ func main() {
 			recordBuilder.WriteString("\n")
 			recordErrStr = recordBuilder.String()
 			_, _ = outputWriter.WriteString(recordErrStr)
+			if firstExitCode == exit_code.Empty {
+				firstExitCode = exit_code.ErrInvalidArgument
+			}
 			continue
 		}
 
 		srcPathInfo, err = os.Stat(srcPath)
 		if err != nil {
+			numErrRecord += 1
+
 			if !errors.Is(err, fs.ErrNotExist) {
 				isRecordErr = true
 				recordBuilder.Reset()
@@ -454,13 +486,16 @@ func main() {
 				exitCode = exit_code.ExitCodeConvertWithErr(err)
 				if exitCode == exit_code.ErrSystem {
 					exitCodeStr = strconv.Itoa(exit_code.SystemError)
-				}else {
+				} else {
 					exitCodeStr = strconv.Itoa(exitCode + errCodeAdditional)
 				}
 				recordBuilder.WriteString(exitCodeStr)
 				recordBuilder.WriteString("\n")
 				recordErrStr = recordBuilder.String()
 				_, _ = outputWriter.WriteString(recordErrStr)
+				if firstExitCode == exit_code.Empty {
+					firstExitCode = exitCode
+				}
 				continue
 			}
 
@@ -476,11 +511,18 @@ func main() {
 				recordBuilder.WriteString("\n")
 				recordErrStr = recordBuilder.String()
 				_, _ = outputWriter.WriteString(recordErrStr)
+				if firstExitCode == exit_code.Empty {
+					firstExitCode = exit_code.ErrNoSuchFileOrDir
+				}
+			} else {
+				numIgSrcNOENT += 1
 			}
 			continue
 		}
 
 		if srcPathInfo.IsDir() {
+			numErrRecord += 1
+
 			if !(*isIgnoreSrcIsDir) {
 				isRecordErr = true
 				recordBuilder.Reset()
@@ -493,12 +535,18 @@ func main() {
 				recordBuilder.WriteString("\n")
 				recordErrStr = recordBuilder.String()
 				_, _ = outputWriter.WriteString(recordErrStr)
+				if firstExitCode == exit_code.Empty {
+					firstExitCode = exit_code.ErrIsDirectory
+				}
+			} else {
+				numIgSrcDir += 1
 			}
 			continue
 		}
 
 		// src and dest are same file
 		if srcPath == destPath {
+			numErrRecord += 1
 			isRecordErr = true
 			recordBuilder.Reset()
 			recordBuilder.WriteString(recordContent.srcRelativeDirtyPath)
@@ -510,6 +558,9 @@ func main() {
 			recordBuilder.WriteString("\n")
 			recordErrStr = recordBuilder.String()
 			_, _ = outputWriter.WriteString(recordErrStr)
+			if firstExitCode == exit_code.Empty {
+				firstExitCode = exit_code.ErrSrcAndDstAreSameFile
+			}
 			continue
 		}
 
@@ -517,6 +568,7 @@ func main() {
 		destPathInfo, err = os.Stat(destPath)
 		if err == nil {
 			if destPathInfo.IsDir() {
+				numErrRecord += 1
 				if !(*isIgnoreDestIsExistDir) {
 					isRecordErr = true
 					recordBuilder.Reset()
@@ -529,12 +581,18 @@ func main() {
 					recordBuilder.WriteString("\n")
 					recordErrStr = recordBuilder.String()
 					_, _ = outputWriter.WriteString(recordErrStr)
+					if firstExitCode == exit_code.Empty {
+						firstExitCode = exit_code.ErrIsDirectory
+					}
+				} else {
+					numIgDestDir += 1
 				}
 				continue
 			}
 
 			// dest is exist file
 			if !(*isOverwriteDestFile) {
+				numErrRecord += 1
 				isRecordErr = true
 				recordBuilder.Reset()
 				recordBuilder.WriteString(recordContent.srcRelativeDirtyPath)
@@ -546,12 +604,18 @@ func main() {
 				recordBuilder.WriteString("\n")
 				recordErrStr = recordBuilder.String()
 				_, _ = outputWriter.WriteString(recordErrStr)
+				if firstExitCode == exit_code.Empty {
+					firstExitCode = exit_code.ErrFileIsExists
+				}
 				continue
+			} else {
+				numOverWrite += 1
 			}
 
 			// trunc dest file
 			_, err = os.OpenFile(destPath, unix.O_RDWR|unix.O_TRUNC, permFileDefault)
 			if err != nil {
+				numErrRecord += 1
 				isRecordErr = true
 				recordBuilder.Reset()
 				recordBuilder.WriteString(recordContent.srcRelativeDirtyPath)
@@ -561,19 +625,23 @@ func main() {
 				exitCode = exit_code.ExitCodeConvertWithErr(err)
 				if exitCode == exit_code.ErrSystem {
 					exitCodeStr = strconv.Itoa(exit_code.SystemError)
-				}else {
+				} else {
 					exitCodeStr = strconv.Itoa(exitCode + errCodeAdditional)
 				}
 				recordBuilder.WriteString(exitCodeStr)
 				recordBuilder.WriteString("\n")
 				recordErrStr = recordBuilder.String()
 				_, _ = outputWriter.WriteString(recordErrStr)
+				if firstExitCode == exit_code.Empty {
+					firstExitCode = exitCode
+				}
 				continue
 			}
 
 			// trunc dest file succeed
-		}else {
+		} else {
 			if !errors.Is(err, fs.ErrNotExist) {
+				numErrRecord += 1
 				isRecordErr = true
 				recordBuilder.Reset()
 				recordBuilder.WriteString(recordContent.srcRelativeDirtyPath)
@@ -583,13 +651,16 @@ func main() {
 				exitCode = exit_code.ExitCodeConvertWithErr(err)
 				if exitCode == exit_code.ErrSystem {
 					exitCodeStr = strconv.Itoa(exit_code.SystemError)
-				}else {
+				} else {
 					exitCodeStr = strconv.Itoa(exitCode + errCodeAdditional)
 				}
 				recordBuilder.WriteString(exitCodeStr)
 				recordBuilder.WriteString("\n")
 				recordErrStr = recordBuilder.String()
 				_, _ = outputWriter.WriteString(recordErrStr)
+				if firstExitCode == exit_code.Empty {
+					firstExitCode = exitCode
+				}
 				continue
 			}
 
@@ -601,7 +672,7 @@ func main() {
 		destFileName = destPath[lastSlashIndex+1:]
 		destParentDir = strings.TrimSuffix(destPath, destFileName)
 
-		if *isDebug{
+		if *isDebug {
 			log.Println("[copylist-debug]Last slash index:", lastSlashIndex)
 			log.Println("[copylist-debug]Dest file name:", destFileName)
 			log.Println("[copylist-debug]Dest parent dir:", destParentDir)
@@ -609,6 +680,7 @@ func main() {
 
 		err = filesystem.CheckOrCreateDir(destParentDir)
 		if err != nil {
+			numErrRecord += 1
 			isRecordErr = true
 			recordBuilder.Reset()
 			recordBuilder.WriteString(recordContent.srcRelativeDirtyPath)
@@ -618,18 +690,24 @@ func main() {
 			exitCode = exit_code.ExitCodeConvertWithErr(err)
 			if exitCode == exit_code.ErrSystem {
 				exitCodeStr = strconv.Itoa(exit_code.SystemError)
-			}else {
+			} else {
 				exitCodeStr = strconv.Itoa(exitCode + errCodeAdditional)
 			}
 			recordBuilder.WriteString(exitCodeStr)
 			recordBuilder.WriteString("\n")
 			recordErrStr = recordBuilder.String()
 			_, _ = outputWriter.WriteString(recordErrStr)
+			if firstExitCode == exit_code.Empty {
+				firstExitCode = exitCode
+			}
 			continue
 		}
 
 		exitCode = file.CopyFile(srcPath, destPath)
 		if exitCode != exit_code.Succeed {
+			// try remove dest file to clean dest to clean dest
+			_ = os.Remove(destPath)
+			numErrRecord += 1
 			isRecordErr = true
 			recordBuilder.Reset()
 			recordBuilder.WriteString(recordContent.srcRelativeDirtyPath)
@@ -638,13 +716,16 @@ func main() {
 			recordBuilder.WriteString(seq)
 			if exitCode == exit_code.ErrSystem {
 				exitCodeStr = strconv.Itoa(exit_code.SystemError)
-			}else {
+			} else {
 				exitCodeStr = strconv.Itoa(exitCode + errCodeAdditional)
 			}
 			recordBuilder.WriteString(exitCodeStr)
 			recordBuilder.WriteString("\n")
 			recordErrStr = recordBuilder.String()
 			_, _ = outputWriter.WriteString(recordErrStr)
+			if firstExitCode == exit_code.Empty {
+				firstExitCode = exitCode
+			}
 			continue
 		}
 
@@ -655,6 +736,7 @@ func main() {
 				// internal retry again
 				err = os.Remove(destPath)
 				if err != nil {
+					numErrRecord += 1
 					isRecordErr = true
 					recordBuilder.Reset()
 					recordBuilder.WriteString(recordContent.srcRelativeDirtyPath)
@@ -664,18 +746,25 @@ func main() {
 					exitCode = exit_code.ExitCodeConvertWithErr(err)
 					if exitCode == exit_code.ErrSystem {
 						exitCodeStr = strconv.Itoa(exit_code.SystemError)
-					}else {
+					} else {
 						exitCodeStr = strconv.Itoa(exitCode + errCodeAdditional)
 					}
 					recordBuilder.WriteString(exitCodeStr)
 					recordBuilder.WriteString("\n")
 					recordErrStr = recordBuilder.String()
 					_, _ = outputWriter.WriteString(recordErrStr)
+					if firstExitCode == exit_code.Empty {
+						firstExitCode = exitCode
+					}
 					continue
 				}
 
 				exitCode = file.CopyFile(srcPath, destPath)
 				if exitCode != exit_code.Succeed {
+					// try remove dest file and checksum file to clean dest
+					_ = os.Remove(destPath)
+					_ = os.Remove(destPath + checksum.MD5Suffix)
+					numErrRecord += 1
 					isRecordErr = true
 					recordBuilder.Reset()
 					recordBuilder.WriteString(recordContent.srcRelativeDirtyPath)
@@ -684,18 +773,25 @@ func main() {
 					recordBuilder.WriteString(seq)
 					if exitCode == exit_code.ErrSystem {
 						exitCodeStr = strconv.Itoa(exit_code.SystemError)
-					}else {
+					} else {
 						exitCodeStr = strconv.Itoa(exitCode + errCodeAdditional)
 					}
 					recordBuilder.WriteString(exitCodeStr)
 					recordBuilder.WriteString("\n")
 					recordErrStr = recordBuilder.String()
 					_, _ = outputWriter.WriteString(recordErrStr)
+					if firstExitCode == exit_code.Empty {
+						firstExitCode = exitCode
+					}
 					continue
 				}
 
 				err = checksum.MD5Checksum(srcPath, destPath, *isGenerateChecksumFile)
 				if err != nil {
+					// try remove dest file and checksum file to clean dest
+					_ = os.Remove(destPath)
+					_ = os.Remove(destPath + checksum.MD5Suffix)
+					numErrRecord += 1
 					isRecordErr = true
 					recordBuilder.Reset()
 					recordBuilder.WriteString(recordContent.srcRelativeDirtyPath)
@@ -707,6 +803,9 @@ func main() {
 					recordBuilder.WriteString("\n")
 					recordErrStr = recordBuilder.String()
 					_, _ = outputWriter.WriteString(recordErrStr)
+					if firstExitCode == exit_code.Empty {
+						firstExitCode = exit_code.ErrChecksumRefuse
+					}
 					continue
 				}
 
@@ -716,30 +815,30 @@ func main() {
 
 	err = outputWriter.Flush()
 	if err != nil {
-		log.Println("[copy-Warning]Failed to flush any buffered data to the underlying io.Writer, and err:", err.Error())
-	}else {
-		log.Println("[copy-Info]Succeed to flush any buffered data to the underlying io.Writer")
+		log.Println("[copylist-Warning]Failed to flush any buffered data to the underlying io.Writer, and err:", err.Error())
+	} else {
+		log.Println("[copylist-Info]Succeed to flush any buffered data to the underlying io.Writer")
 	}
 
 	err = outputF.Sync()
 	if err != nil {
-		log.Println("[copy-Warning]Failed to sync content of file to storage, and err:", err.Error())
-	}else {
-		log.Println("[copy-Info]Succeed to sync content of file to storage")
+		log.Println("[copylist-Warning]Failed to sync content of file to storage, and err:", err.Error())
+	} else {
+		log.Println("[copylist-Info]Succeed to sync content of file to storage")
 	}
 
 	err = inputF.Close()
 	if err != nil {
-		log.Println("[copy-Warning]Failed to close input record file, and err:", err.Error())
-	}else {
-		log.Println("[copy-Warning]Succeed to close input record file")
+		log.Println("[copylist-Warning]Failed to close input record file, and err:", err.Error())
+	} else {
+		log.Println("[copylist-Warning]Succeed to close input record file")
 	}
 
 	err = outputF.Close()
 	if err != nil {
-		log.Println("[copy-Warning]Failed to close output record file, and err:", err.Error())
-	}else {
-		log.Println("[copy-Warning]Succeed to close output record file")
+		log.Println("[copylist-Warning]Failed to close output record file, and err:", err.Error())
+	} else {
+		log.Println("[copylist-Warning]Succeed to close output record file")
 	}
 
 	if *isRemoveInRecordFile {
@@ -747,7 +846,7 @@ func main() {
 		if err != nil {
 			log.Println("[copylist-Warning]Failed to remove input record file:", inRecordFilePath,
 				"and err:", err.Error())
-		}else {
+		} else {
 			log.Println("[copylist-Info]Succeed to remove input record file:", inRecordFilePath)
 		}
 	}
@@ -760,11 +859,33 @@ func main() {
 			exitCode = exit_code.ExitCodeConvertWithErr(err)
 			os.Exit(exitCode)
 		}
-		log.Println("[copy-Info]Succeed to create track file:", trackFilePath)
+		log.Println("[copylist-Info]Succeed to create track file:", trackFilePath)
 	}
 
 	if isRecordErr {
 		log.Println("[copylist-Warning]Record some error to output record file:", outRecordFilePath)
+	}
+
+	log.Println("[copylist-Info]Number total ->",
+		"total record:", numRecord,
+		"err record:", numErrRecord,
+		"ignore src is dir:", numIgSrcDir,
+		"ignore src not exist:", numIgSrcNOENT,
+		"ignore dest is dir:", numIgDestDir,
+		"overWrite:", numOverWrite)
+	if numRecord == numErrRecord {
+		if firstExitCode != exit_code.Empty {
+			log.Println("[copylist-Error]All records get err, exit with first err:", firstExitCode)
+			os.Exit(firstExitCode)
+		}
+
+		log.Println("[copylist-Info]All records get err, but all ignore, exit with 0")
+		os.Exit(exit_code.Succeed)
+	}
+
+	if isRecordErr {
+		log.Println("[copylist-Error]Some records get err, exit with",
+			exit_code.ErrCopylistPartial, "(ErrCopylistPartial)")
 		os.Exit(exit_code.ErrCopylistPartial)
 	}
 
@@ -773,14 +894,13 @@ func main() {
 
 }
 
-
 /*
 	stand format:
 	format 1: "srctest/dir1/file1","desttest/dir2/file2"
 	format 2: "srctest/dir1/file1","desttest/dir2/file2",1202
 
 	use LF (\n) as a line break
- */
+*/
 func checkRecord(record string) bool {
 	if strings.Contains(record, delimCRLFStr) {
 		log.Println("[copylist-Error]Use unsupport delim: CRLF")
@@ -828,8 +948,8 @@ func checkRecordPath(path string) bool {
 }
 
 type recordInfo struct {
-	srcRelativeDirtyPath string
-	srcRelativeCleanPath string
+	srcRelativeDirtyPath  string
+	srcRelativeCleanPath  string
 	destRelativeDirtyPath string
 	destRelativeCleanPath string
 }
@@ -842,7 +962,6 @@ func cleanRecord(record string) (recordInfo, bool) {
 	if len(recordList) < minLimitRecord || len(recordList) > maxLimitRecord {
 		return recordInfo{}, false
 	}
-
 
 	srcDirty, srcClean, ok := cleanRecordPath(recordList[srcRelativeRecordIndex])
 	if !ok {
@@ -884,7 +1003,7 @@ func isNeedChecksum(fileName string, fileSuffixList []string) bool {
 		return false
 	}
 
-	var	isMatch bool
+	var isMatch bool
 	for _, suffix := range fileSuffixList {
 		isMatch, _ = filepath.Match(suffix, fileName)
 		if isMatch {
