@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	emptyValue   = "empty"
+	emptyValue = "empty"
 )
 
 func main() {
@@ -117,7 +117,7 @@ func main() {
 	}
 
 	isPathAvailable = filesystem.CheckFilePathFormat(destFilePath)
-	if isPathAvailable {
+	if !isPathAvailable {
 		log.Println("[checksum-Error]Unavailable dest:", destFilePath)
 		os.Exit(exit_code.ErrInvalidArgument)
 	}

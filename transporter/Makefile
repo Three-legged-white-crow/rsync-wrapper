@@ -24,7 +24,7 @@ stat-wrapper:
 	go build -o cmd/stat_wrapper/stat-wrapper cmd/stat_wrapper/main.go
 
 copy:
-	go build -o cmd/copy/copy cmd/copy/main.go
+	go build -tags netgo -o cmd/copy/copy cmd/copy/main.go
 
 copylist:
 	go build -o cmd/copylist/copylist cmd/copylist/main.go
