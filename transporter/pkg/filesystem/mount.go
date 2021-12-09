@@ -34,10 +34,20 @@ func IsAvailableFileSystem(fsType int64) bool {
 }
 
 func IsMountPath(path string) error {
-
+	var err error
 	fsInfo := unix.Statfs_t{}
-	err := unix.Statfs(path, &fsInfo)
-	if err != nil {
+
+	for {
+		err = unix.Statfs(path, &fsInfo)
+		if err == nil {
+			break
+		}
+
+		// We have to check EINTR here, per issues 11180 and 39237.
+		if err == unix.EINTR {
+			continue
+		}
+
 		return err
 	}
 
@@ -48,7 +58,6 @@ func IsMountPath(path string) error {
 
 	return nil
 }
-
 
 func IsMountPathList(pathList ...string) error {
 	var err error
