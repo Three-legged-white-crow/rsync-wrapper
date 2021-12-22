@@ -26,6 +26,8 @@ const (
 	waitNFSCliUpdate   = 5
 	waitNFSCcliLimit   = 5
 	defaultLimtReadDir = 100
+	flagFileName       = "succeed-copy-file"
+	flagContent        = "The generation of this file indicates that all file copy operations have been completed"
 )
 
 func main() {
@@ -75,6 +77,12 @@ func main() {
 		0,
 		"interval for report progress info, time unit is second, must positive integer")
 
+	retryLimit := flag.Int(
+		"retry-limit",
+		-1,
+		"limit of retry copy, default limit is 3",
+	)
+
 	isExcludeSrcDir := flag.Bool(
 		"exclude-src",
 		false,
@@ -119,6 +127,7 @@ func main() {
 		"isReportStderr:", *isReportStderr,
 		"reportAddress:", *addrReport,
 		"reportInterval(second):", *intervalReport,
+		"retryLimit:", *retryLimit,
 		"isExcludeSrcDir:", *isExcludeSrcDir,
 		"isOverwriteDestFile:", *isOverwriteDestFile,
 		"isGenerateChecksumFile:", *isGenerateChecksumFile,
@@ -171,7 +180,7 @@ func main() {
 	if *fileSuffixForChecksum == emptyValue {
 		isChecksumSuffixEmpty = true
 		log.Println("[copy-Info]Not specify checksum suffix, not checksum")
-	}else {
+	} else {
 		checksumFileSuffixList = strings.Split(*fileSuffixForChecksum, slashStr)
 	}
 
@@ -256,17 +265,17 @@ func main() {
 				- if failed to rsync -> get exit code from stderr of rsync -> accord exit code retry or not
 				- if succeed to rsync -> succeed
 			- if need report progress and stderr -> start goroutine to report
-	 */
+	*/
 
 	log.Println("[copy-Info]Start check src is exist")
 	var (
-		srcInfo  os.FileInfo
-		retryNum int
+		srcInfo      os.FileInfo
+		retryStatNum int
 	)
 	for {
-		if retryNum >= waitNFSCcliLimit {
+		if retryStatNum >= waitNFSCcliLimit {
 			log.Println("[copy-Error]Src path:", srcPath1,
-				"is not exist, retry stat num:", retryNum)
+				"is not exist, retry stat num:", retryStatNum)
 			os.Exit(exit_code.ErrNoSuchFileOrDir)
 		}
 
@@ -276,14 +285,14 @@ func main() {
 			break
 		}
 
-		if errors.Is(err, fs.ErrNotExist) {
+		if !errors.Is(err, fs.ErrNotExist) {
 			log.Println("[copy-Error]Failed to stat src path:", srcPath1,
 				"and err:", err.Error())
 			exitCode = exit_code.ExitCodeConvertWithErr(err)
 			os.Exit(exitCode)
 		}
 
-		retryNum += 1
+		retryStatNum += 1
 	}
 	log.Println("[copy-Info]Check src path is exist...Exist")
 
@@ -306,7 +315,7 @@ func main() {
 			os.Exit(exitCode)
 		}
 		log.Println("[copy-Info]Succeed to create temp dest dir:", destTempDirPath)
-	}else {
+	} else {
 		if !destTempDirInfo.IsDir() {
 			log.Println("[copy-Info]Check temp dest dir...Exist, but is file")
 			log.Println("[copy-Error]Temp dest dir is a exist file")
@@ -339,7 +348,7 @@ func main() {
 			os.Exit(exit_code.ErrDirectoryNestedItself)
 		}
 
-			log.Println("[copy-Info]Src is dir, ready copy")
+		log.Println("[copy-Info]Src is dir, ready copy")
 		if *isExcludeSrcDir {
 			log.Println("[copy-Info]Start check final dest dir has same name file or dir that wait copy")
 			var isDestFinalDirAvailable bool
@@ -371,6 +380,7 @@ func main() {
 			ReportClient:     rc,
 			ReportInterval:   *intervalReport,
 			ReportAddr:       *addrReport,
+			RetryLimit:       *retryLimit,
 		}
 
 		startTime := time.Now().String()
@@ -394,7 +404,6 @@ func main() {
 		os.Exit(exit_code.ErrInvalidArgument)
 	}
 	log.Println("[copy-Info]Check src path format...OK")
-
 
 	var trackFilePath string
 	if isCreateTrackFile {
@@ -427,7 +436,7 @@ func main() {
 			os.Exit(exitCode)
 		}
 		log.Println("[copy-Info]Succeed to create final dest dir:", destFinalDirPath)
-	}else {
+	} else {
 		if !destFinalDirInfo.IsDir() {
 			log.Println("[copy-Info]Check final dest dir...Exist, but is file")
 			log.Println("[copy-Error]Final dest dir is a exist file")
@@ -435,20 +444,30 @@ func main() {
 		}
 	}
 
+	fileName := srcInfo.Name()
+	destFinalFileName := destFinalDirPath + fileName
 	// case: cp /home/dir/file /home/dir/ or cp /home/dir/file /home/dir/file
-	if (srcPath1 == (destFinalDirPath + srcInfo.Name())) || (srcPath1 + slashStr == destFinalDirPath) {
+	if srcPath1 == destFinalFileName {
 		log.Println("[copy-Error]The source and destination are the same file, file:", srcPath1)
 		os.Exit(exit_code.ErrSrcAndDstAreSameFile)
 	}
 
+	// check succeed-copy-file is exist, if exist -> exit with succeed
+	if isCompleteFileCopy(destTempDirPath) {
+		log.Println(
+			"[copy-Info]Flag file: succeed-copy-file is exist, "+
+				"all step of file copy has been complete, exit with",
+			exit_code.ErrCopyFileSucceed)
+		os.Exit(exit_code.ErrCopyFileSucceed)
+	}
+
 	log.Println("[copy-Info]Start copy file, Step 1 -> copy file from src:", srcPath1,
 		"to temp dest dir:", destTempDirPath)
-	fileName := srcInfo.Name()
+
 	destTempFileName := destTempDirPath + fileName
 	destTempCheckFileName := destTempFileName + checksum.MD5Suffix
-	destFinalFileName := destFinalDirPath + fileName
 	destFinalCheckFileName := destFinalFileName + checksum.MD5Suffix
-	exitCode = file.CopyFile(srcPath1, destTempFileName)
+	exitCode = file.CopyFile(srcPath1, destTempFileName, *retryLimit)
 	if exitCode != exit_code.Succeed {
 		log.Println("[copy-Error]Failed to copy(1) file from src:", srcPath1,
 			"to dest:", destTempFileName,
@@ -480,7 +499,7 @@ func main() {
 
 			log.Println("[copy-Info]Internal retry at copy file, start copy(2) file from src:", srcPath1,
 				"to dest:", destTempFileName)
-			exitCode = file.CopyFile(srcPath1, destTempFileName)
+			exitCode = file.CopyFile(srcPath1, destTempFileName, *retryLimit)
 			if exitCode != exit_code.Succeed {
 				log.Println(
 					"[copy-Error]Internal retry at copy file, failed to copy(2) file from src:", srcPath1,
@@ -506,7 +525,6 @@ func main() {
 		log.Println("[copy-Info]Succeed to checksum src:", srcPath1, "dest:", destTempFileName)
 
 	}
-
 
 	log.Println("[copy-Info]Start copy file, ->Step 2-> copy file from temp dest:", destTempFileName,
 		"to final dest:", destFinalFileName)
@@ -575,10 +593,15 @@ func main() {
 	if err != nil {
 		log.Println("[copy-Waring]Failed to remove temp dest dir:", destTempDirPath,
 			"and err:", err.Error())
-	}else {
+	} else {
 		log.Println("[copy-Info]Succeed to remove temp dest dir:", destTempDirPath)
 	}
 
+	// check and create flag file
+	err = setCompleteFlagFileCopy(srcPath1, destTempDirPath, destFinalDirPath)
+	if err != nil {
+		log.Println("[copy-Warning]Failed to create flag file and err:", err.Error())
+	}
 	log.Println("[copy-Info]Copy file is end with exit code:", exit_code.ErrCopyFileSucceed)
 	os.Exit(exit_code.ErrCopyFileSucceed)
 
@@ -589,7 +612,7 @@ func isNeedChecksum(fileName string, fileSuffixList []string) bool {
 		return false
 	}
 
-	var	isMatch bool
+	var isMatch bool
 	for _, suffix := range fileSuffixList {
 		isMatch, _ = filepath.Match(suffix, fileName)
 		if isMatch {
@@ -614,7 +637,7 @@ func checkDestFinalDir(srcDirPath, destDirPath string) (bool, error) {
 	defer sf.Close()
 
 	var (
-		nameList []string
+		nameList    []string
 		newFilePath string
 	)
 	for {
@@ -654,4 +677,95 @@ func checkDestFinalDir(srcDirPath, destDirPath string) (bool, error) {
 	}
 
 	return true, nil
+}
+
+func buildFlagFilePath(dirPath string) (flagFilePath string) {
+	dirPathLen := len(dirPath)
+	if dirPath[dirPathLen-1] == slash {
+		dirPath = dirPath[:dirPathLen-1]
+	}
+
+	flagFilePath = dirPath + "_" + flagFileName
+	return flagFilePath
+}
+
+func isCompleteFileCopy(tmpDestDir string) bool {
+	flagFilePath := buildFlagFilePath(tmpDestDir)
+
+	log.Println("[copy-Info]Start check 'succeed-copy-file' is exist")
+	var (
+		flagFileInfo os.FileInfo
+		err          error
+		retryStatNum int
+		exitCode     int
+	)
+	for {
+		if retryStatNum >= waitNFSCcliLimit {
+			log.Println(
+				"[copy-Warning]Flag file: succeed-copy-file path:", flagFilePath,
+				"is not exist, retry stat num:", retryStatNum)
+			return false
+		}
+
+		time.Sleep(waitNFSCliUpdate * time.Second)
+		flagFileInfo, err = os.Stat(flagFilePath)
+		if err == nil {
+			if flagFileInfo.IsDir() {
+				log.Println(
+					"[copy-Warning]Flag file: succeed-copy-file is exist but is dir:",
+					flagFilePath)
+				return false
+			}
+
+			log.Println(
+				"[copy-Info]Flag file: succeed-copy-file is exist file:",
+				flagFilePath)
+			return true
+		}
+
+		if !errors.Is(err, fs.ErrNotExist) {
+			log.Println(
+				"[copy-Error]Failed to stat flag path:", flagFilePath,
+				"and err:", err.Error())
+			exitCode = exit_code.ExitCodeConvertWithErr(err)
+			os.Exit(exitCode)
+		}
+
+		retryStatNum += 1
+	}
+
+}
+
+func setCompleteFlagFileCopy(src, tmpDestDir, finalDestDir string) error {
+
+	flagFilePath := buildFlagFilePath(tmpDestDir)
+
+	log.Println("[copy-Info]Start create flag file of complete file copy:", flagFilePath)
+	f, err := os.Create(flagFilePath)
+	if err != nil {
+		return err
+	}
+
+	contentBuilder := strings.Builder{}
+	contentBuilder.WriteString(flagContent)
+	contentBuilder.WriteString("\n")
+	contentBuilder.WriteString("\n")
+	contentBuilder.WriteString("create or truncat at: ")
+	createTime := time.Now().String()
+	contentBuilder.WriteString(createTime)
+	contentBuilder.WriteString("\n")
+	contentBuilder.WriteString("src file path:")
+	contentBuilder.WriteString(src)
+	contentBuilder.WriteString("\n")
+	contentBuilder.WriteString("tmp dir path:")
+	contentBuilder.WriteString(tmpDestDir)
+	contentBuilder.WriteString("\n")
+	contentBuilder.WriteString("final dir path:")
+	contentBuilder.WriteString(finalDestDir)
+	_, err = f.WriteString(contentBuilder.String())
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

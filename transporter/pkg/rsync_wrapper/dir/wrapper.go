@@ -36,27 +36,36 @@ type ReqRun struct {
 	ReportClient     *client.ReportClient
 	ReportInterval   int
 	ReportAddr       string
+	RetryLimit       int
 }
 
 // Run run rsync command and if err return by rsync is recoverable will auto retry.
 func Run(req ReqRun) int {
 	var (
-		res             resultRsync
-		currentRetryNum = 0
-		finalExitCode   int
-		isExitDirect    bool = false
+		res               resultRsync
+		currentRetryNum   = 0
+		currentRetryLimit int
+		finalExitCode     int
+		isExitDirect      bool = false
 	)
+
+	currentRetryLimit = req.RetryLimit
+	if currentRetryLimit < 0 {
+		currentRetryLimit = retryMaxLimit
+	}
+	log.Println("[copy-Info]Limit of retry dir copy:", currentRetryLimit)
 
 	for {
 
-		if currentRetryNum >= retryMaxLimit {
+		if currentRetryNum > currentRetryLimit {
 			curExitCode := rsync_wrapper.ExitCodeConvert(res.exitCode)
 			if req.IsReportStderr {
 				_ = reportStderr(curExitCode, res.exitReason, res.stdErr, req.ReportAddr, req.ReportClient)
+				_ = reportStderr(exit_code.ErrRetryLimit, exit_code.ErrMsgMaxLimitRetry, res.stdErr, req.ReportAddr, req.ReportClient)
 			}
 			log.Println(exit_code.ErrMsgMaxLimitRetry)
-			log.Println("[Retry Limit]Use latest process exit code:", res.exitCode, "latest retry count:", retryMaxLimit)
-			return curExitCode
+			log.Println("[Retry Limit]Latest process exit code:", res.exitCode, "latest retry count:", retryMaxLimit)
+			return exit_code.ErrRetryLimit
 		}
 
 		res = runRsync(req.SrcPath, req.DestPath, req.ReportAddr, req.IsReportProgress, req.ReportClient, req.ReportInterval)
@@ -83,7 +92,7 @@ func Run(req ReqRun) int {
 				finalExitCode = exitCodeStderr
 				isExitDirect = true
 			}
-		}else {
+		} else {
 			log.Println("[copy-Warning]Stderr is empty")
 		}
 

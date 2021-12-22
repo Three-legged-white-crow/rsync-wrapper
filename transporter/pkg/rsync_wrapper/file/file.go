@@ -2,6 +2,7 @@ package file
 
 import (
 	"errors"
+	"log"
 	"os/exec"
 
 	"golang.org/x/sys/unix"
@@ -13,10 +14,10 @@ const (
 	rsyncBinPath       = "/usr/local/bin/rsync"
 	rsyncOptionBasic   = "-rlptgoHA"
 	rsyncOptionPartial = "--partial"
+	retryMaxLimit      = 3
 )
 
-
-func CopyFile(src, dest string) int {
+func CopyFile(src, dest string, retryLimt int) int {
 
 	c := exec.Command(
 		rsyncBinPath,
@@ -26,33 +27,60 @@ func CopyFile(src, dest string) int {
 		dest)
 
 	var (
-		finalExitCode int
-		ok            bool
+		finalExitCode     int
+		ok                bool
+		currentRetryLimit int
+		currentRetryNum   int
+		stdoutStderr      []byte
+		err               error
 	)
-	stdoutStderr, err := c.CombinedOutput()
-	if err != nil {
+
+	currentRetryLimit = retryLimt
+	if currentRetryLimit < 0 {
+		currentRetryLimit = retryMaxLimit
+	}
+
+	for {
+		if currentRetryNum > currentRetryLimit {
+			return exit_code.ErrRetryLimit
+		}
+
+		stdoutStderr, err = c.CombinedOutput()
+		if err == nil {
+			return exit_code.Succeed
+		}
+
 		if errors.Is(err, unix.EINVAL) {
 			return exit_code.ErrInvalidArgument
 		}
 
 		var processExitErr *exec.ExitError
 		processExitErr, ok = err.(*exec.ExitError)
-		if ok {
-			finalExitCode, ok = rsync_wrapper.ExitCodeConvertWithStderr(string(stdoutStderr))
-			if !ok {
-				finalExitCode = rsync_wrapper.ExitCodeConvert(processExitErr.ExitCode())
-			}
+		if !ok {
+			log.Println(
+				"[CopyFile-Error]Get err but not ExitError when copy src:", src,
+				"to dest:", dest,
+				"and err:", err.Error())
+			return exit_code.ErrSystem
+		}
 
+		finalExitCode, ok = rsync_wrapper.ExitCodeConvertWithStderr(string(stdoutStderr))
+		if ok {
 			return finalExitCode
 		}
 
-		return exit_code.ErrSystem
+		processExitCode := processExitErr.ExitCode()
+		if rsync_wrapper.IsErrUnRecoverable(processExitCode) {
+			log.Println(
+				"[CopyFile-Error]Get unrecoverable err when copy src:", src,
+				"to dest:", dest,
+				"and err:", processExitErr.Error())
+			finalExitCode = rsync_wrapper.ExitCodeConvert(processExitCode)
+			return finalExitCode
+		}
+
+		currentRetryNum += 1
+		continue
 	}
 
-	finalExitCode, ok = rsync_wrapper.ExitCodeConvertWithStderr(string(stdoutStderr))
-	if ok {
-		return finalExitCode
-	}
-
-	return exit_code.Succeed
 }

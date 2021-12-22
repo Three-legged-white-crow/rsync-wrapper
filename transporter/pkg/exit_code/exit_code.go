@@ -54,6 +54,7 @@ const (
 	ErrSrcAndDstAreSameFile  = 203
 	ErrDirectoryNestedItself = 204
 	ErrInvalidListFile       = 205
+	ErrRetryLimit            = 208
 	ErrCopylistPartial       = 252
 	ErrCopyFileSucceed       = 254
 	ErrSystem                = 255
@@ -122,6 +123,7 @@ const (
 	SrcAndDstAreSameFile  = 1403
 	DirectoryNestedItself = 1404
 	InvalidListFile       = 1405
+	RetryLimit            = 1408
 )
 
 func ExitCodeConvertWithErr(err error) int {

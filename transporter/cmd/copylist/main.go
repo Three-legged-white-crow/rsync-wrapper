@@ -104,6 +104,11 @@ func main() {
 		false,
 		"remove input record file")
 
+	retryLimit := flag.Int(
+		"retry-limit",
+		-1,
+		"limit of retry copy, default limit is 3")
+
 	isDebug := flag.Bool(
 		"debug",
 		false,
@@ -126,6 +131,7 @@ func main() {
 		"trackFileRelativePath:", *trackFileRelativePath,
 		"fileSuffixForChecksum:", *fileSuffixForChecksum,
 		"isRemoveInRecordFile:", *isRemoveInRecordFile,
+		"retryLimit:", *retryLimit,
 		"isDebug:", *isDebug,
 	)
 
@@ -257,12 +263,12 @@ func main() {
 
 	var (
 		inputRecordFileInfo os.FileInfo
-		retryNum            int
+		retryStatNum        int
 	)
 	for {
-		if retryNum >= waitNFSCcliLimit {
+		if retryStatNum >= waitNFSCcliLimit {
 			log.Println("[copylist-Error]Input record file:", inRecordFilePath,
-				"is not exit, retry num:", retryNum)
+				"is not exit, retry num:", retryStatNum)
 			os.Exit(exit_code.ErrNoSuchFileOrDir)
 		}
 
@@ -284,7 +290,7 @@ func main() {
 			os.Exit(exitCode)
 		}
 
-		retryNum += 1
+		retryStatNum += 1
 	}
 	log.Println("[copylist-Info]Check input record file is exist...Exist")
 
@@ -703,7 +709,7 @@ func main() {
 			continue
 		}
 
-		exitCode = file.CopyFile(srcPath, destPath)
+		exitCode = file.CopyFile(srcPath, destPath, *retryLimit)
 		if exitCode != exit_code.Succeed {
 			// try remove dest file to clean dest to clean dest
 			_ = os.Remove(destPath)
@@ -759,7 +765,7 @@ func main() {
 					continue
 				}
 
-				exitCode = file.CopyFile(srcPath, destPath)
+				exitCode = file.CopyFile(srcPath, destPath, *retryLimit)
 				if exitCode != exit_code.Succeed {
 					// try remove dest file and checksum file to clean dest
 					_ = os.Remove(destPath)
