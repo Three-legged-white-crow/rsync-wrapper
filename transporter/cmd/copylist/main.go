@@ -272,7 +272,6 @@ func main() {
 			os.Exit(exit_code.ErrNoSuchFileOrDir)
 		}
 
-		time.Sleep(waitNFSCliUpdate * time.Second)
 		inputRecordFileInfo, err = os.Stat(inRecordFilePath)
 		if err == nil {
 			if inputRecordFileInfo.IsDir() {
@@ -290,6 +289,7 @@ func main() {
 			os.Exit(exitCode)
 		}
 
+		time.Sleep(waitNFSCliUpdate * time.Second)
 		retryStatNum += 1
 	}
 	log.Println("[copylist-Info]Check input record file is exist...Exist")
@@ -305,8 +305,9 @@ func main() {
 
 	// check record format of input file
 	var (
-		line              string
-		isRecordAvailable bool
+		line               string
+		isRecordAvailable  bool
+		availableRecordNum int
 	)
 	inputReader := bufio.NewReader(inputF)
 	for {
@@ -321,10 +322,17 @@ func main() {
 				os.Exit(exitCode)
 			}
 
-			log.Println("[copylist-Error]Read EOF of input record file:", inRecordFilePath)
+			if len(line) > 0 {
+				_ = inputF.Close()
+				log.Println("[copylist-Error]Last line is not end with LF")
+				os.Exit(exit_code.ErrInvalidListFile)
+			}
+
+			log.Println("[copylist-Info]Read EOF of input record file:", inRecordFilePath)
 			break
 		}
 
+		availableRecordNum += 1
 		isRecordAvailable = checkRecord(line)
 		if !isRecordAvailable {
 			_ = inputF.Close()
@@ -333,6 +341,12 @@ func main() {
 		}
 	}
 	_ = inputF.Close()
+
+	if availableRecordNum == 0 {
+		log.Println("[copylist-Error]Empty input record file")
+		os.Exit(exit_code.ErrInvalidListFile)
+	}
+
 	log.Println("[copylist-Info]Check record format of input file...OK")
 
 	log.Println("[copylist-Info]Start parse input record file, reopen input file")

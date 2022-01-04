@@ -159,7 +159,6 @@ func main() {
 			os.Exit(exit_code.ErrNoSuchFileOrDir)
 		}
 
-		time.Sleep(waitNFSCliUpdate * time.Second)
 		srcInfo, err = os.Stat(srcPath1)
 		if err == nil {
 			break
@@ -172,6 +171,7 @@ func main() {
 			os.Exit(exitCode)
 		}
 
+		time.Sleep(waitNFSCliUpdate * time.Second)
 		srcRetryNum += 1
 	}
 	log.Println("[mvWrapper-Info]Check src path is exist...Exist")
@@ -189,7 +189,6 @@ func main() {
 			break
 		}
 
-		time.Sleep(waitNFSCliUpdate * time.Second)
 		destInfo, err = os.Stat(destPath)
 		if err == nil {
 			log.Println("[mvWrapper-Info]Check dest path is exist...Exist")
@@ -203,6 +202,7 @@ func main() {
 			os.Exit(exitCode)
 		}
 
+		time.Sleep(waitNFSCliUpdate * time.Second)
 		destRetryNum += 1
 	}
 

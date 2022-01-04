@@ -279,7 +279,6 @@ func main() {
 			os.Exit(exit_code.ErrNoSuchFileOrDir)
 		}
 
-		time.Sleep(waitNFSCliUpdate * time.Second)
 		srcInfo, err = os.Stat(srcPath1)
 		if err == nil {
 			break
@@ -292,6 +291,7 @@ func main() {
 			os.Exit(exitCode)
 		}
 
+		time.Sleep(waitNFSCliUpdate * time.Second)
 		retryStatNum += 1
 	}
 	log.Println("[copy-Info]Check src path is exist...Exist")

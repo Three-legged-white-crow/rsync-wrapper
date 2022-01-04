@@ -123,7 +123,6 @@ func main() {
 			os.Exit(exit_code.ErrNoSuchFileOrDir)
 		}
 
-		time.Sleep(waitNFSCliUpdate * time.Second)
 		pInfo, err = os.Stat(path)
 		if err == nil {
 			isPathDir := pInfo.IsDir()
@@ -167,6 +166,7 @@ func main() {
 			os.Exit(exitCode)
 		}
 
+		time.Sleep(waitNFSCliUpdate * time.Second)
 		retryNum += 1
 	}
 }

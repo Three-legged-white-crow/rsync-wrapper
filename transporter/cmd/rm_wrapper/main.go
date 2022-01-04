@@ -145,7 +145,6 @@ func main() {
 			os.Exit(exit_code.Succeed)
 		}
 
-		time.Sleep(waitNFSCliUpdate * time.Second)
 		pInfo, err = os.Stat(rmPath)
 		if err == nil {
 			break
@@ -157,6 +156,7 @@ func main() {
 			os.Exit(exitCode)
 		}
 
+		time.Sleep(waitNFSCliUpdate * time.Second)
 		retryNum += 1
 	}
 	log.Println("[rmWrapper-Info]Check path is exist...Exist")
@@ -176,12 +176,18 @@ func main() {
 	if !pInfo.IsDir() {
 		log.Println("[rmWrapper-Info]Start remove file:", rmPath)
 		err = os.Remove(rmPath)
-		if err != nil {
+		if err == nil {
+			log.Println("[rmWrapper-Info]End remove file:", rmPath)
+			os.Exit(exit_code.Succeed)
+		}
+
+		if !errors.Is(err, fs.ErrNotExist) {
 			log.Println("[rmWrapper-Error]Failed to remove file:", rmPath, "and err:", err.Error())
 			exitCode = exit_code.ExitCodeConvertWithErr(err)
 			os.Exit(exitCode)
 		}
-		log.Println("[rmWrapper-Info]End remove file:", rmPath)
+
+		log.Println("[rmWrapper-Info]File is not exist, return succeed directly")
 		os.Exit(exit_code.Succeed)
 	}
 
