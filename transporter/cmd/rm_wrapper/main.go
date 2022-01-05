@@ -90,7 +90,7 @@ func main() {
 
 	if *fileSuffix == emptyValue {
 		isSuffixEmpty = true
-		log.Println("[copy-Info]Not specify file suffix")
+		log.Println("[rmWrapper-Info]Not specify file suffix")
 	} else {
 		suffixList = strings.Split(*fileSuffix, slashStr)
 	}

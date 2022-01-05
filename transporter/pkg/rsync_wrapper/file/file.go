@@ -12,19 +12,12 @@ import (
 
 const (
 	rsyncBinPath       = "/usr/local/bin/rsync"
-	rsyncOptionBasic   = "-rlptgoHA"
+	rsyncOptionBasic   = "-rlptgoHAS"
 	rsyncOptionPartial = "--partial"
 	retryMaxLimit      = 3
 )
 
 func CopyFile(src, dest string, retryLimt int) int {
-
-	c := exec.Command(
-		rsyncBinPath,
-		rsyncOptionBasic,
-		rsyncOptionPartial,
-		src,
-		dest)
 
 	var (
 		finalExitCode     int
@@ -44,6 +37,13 @@ func CopyFile(src, dest string, retryLimt int) int {
 		if currentRetryNum > currentRetryLimit {
 			return exit_code.ErrRetryLimit
 		}
+
+		c := exec.Command(
+			rsyncBinPath,
+			rsyncOptionBasic,
+			rsyncOptionPartial,
+			src,
+			dest)
 
 		stdoutStderr, err = c.CombinedOutput()
 		if err == nil {
