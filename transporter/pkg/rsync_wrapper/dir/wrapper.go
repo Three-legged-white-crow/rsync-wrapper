@@ -5,6 +5,7 @@ import (
 	"context"
 	"log"
 	"os/exec"
+	"strings"
 
 	"transporter/pkg/client"
 	"transporter/pkg/exit_code"
@@ -14,9 +15,11 @@ import (
 const (
 	retryMaxLimit       = 3
 	rsyncBinPath        = "/usr/local/bin/rsync"
-	rsyncOptionBasic    = "-rlptgoHAS"
+	rsyncOptionBasic    = "-rlptgoHA"
 	rsyncOptionProgress = "--progress"
 	rsyncOptionPartial  = "--partial"
+	rsyncOptionSparse   = "--sparse"
+	rsyncOptionFilter   = "--filter="
 )
 
 // reqResult is result of rsync cmd to report.
@@ -28,19 +31,21 @@ type reqResult struct {
 	Reason       string `json:"reason"`        // reason of exit error
 }
 
-type ReqRun struct {
+type ReqContent struct {
 	SrcPath          string
 	DestPath         string
 	IsReportProgress bool
 	IsReportStderr   bool
+	IsHandleSparse   bool
 	ReportClient     *client.ReportClient
 	ReportInterval   int
 	ReportAddr       string
 	RetryLimit       int
+	FilterList       []string
 }
 
 // Run run rsync command and if err return by rsync is recoverable will auto retry.
-func Run(req ReqRun) int {
+func Run(req ReqContent) int {
 	var (
 		res               resultRsync
 		currentRetryNum   = 0
@@ -68,7 +73,7 @@ func Run(req ReqRun) int {
 			return exit_code.ErrRetryLimit
 		}
 
-		res = runRsync(req.SrcPath, req.DestPath, req.ReportAddr, req.IsReportProgress, req.ReportClient, req.ReportInterval)
+		res = runRsync(req)
 		if res.exitCode == rsync_wrapper.ErrOK {
 			log.Println(exit_code.ErrMsgSucceed)
 			log.Println("[Complete]process exit code:", res.exitCode, "exit reason:", res.exitReason)
@@ -132,22 +137,43 @@ type resultRsync struct {
 }
 
 // runRsync run rsync command and get stdout and stderr.
-func runRsync(src, dest, addr string, isReportProgress bool, rc *client.ReportClient, reportInterval int) (res resultRsync) {
+func runRsync(req ReqContent) (res resultRsync) {
 	res.exitCode = rsync_wrapper.ErrOK
 	res.exitReason = rsync_wrapper.ErrOKMsg
 
 	var c *exec.Cmd
+	var cmdArgList = []string{rsyncOptionBasic, rsyncOptionPartial}
+	if req.IsHandleSparse {
+		cmdArgList = append(cmdArgList, rsyncOptionSparse)
+	}
+	if req.IsReportProgress {
+		cmdArgList = append(cmdArgList, rsyncOptionProgress)
+	}
 
-	if isReportProgress {
+	var filterArg = strings.Builder{}
+	var filterArgStr string
+	if len(req.FilterList) > 0 {
+		for _, rule := range req.FilterList {
+			if len(rule) == 0 {
+				continue
+			}
+
+			filterArg.Reset()
+			filterArg.WriteString(rsyncOptionFilter)
+			filterArg.WriteString(rule)
+			filterArgStr = filterArg.String()
+			cmdArgList = append(cmdArgList, filterArgStr)
+		}
+	}
+
+	cmdArgList = append(cmdArgList, req.SrcPath)
+	cmdArgList = append(cmdArgList, req.DestPath)
+
+	c = exec.Command(rsyncBinPath, cmdArgList...)
+	log.Println("[copy-Info]cmd string:", c.String())
+
+	if req.IsReportProgress {
 		log.Println("[copy-Info]read stdout of cmd turn on")
-
-		c = exec.Command(
-			rsyncBinPath,
-			rsyncOptionBasic,
-			rsyncOptionPartial,
-			rsyncOptionProgress,
-			src,
-			dest)
 
 		stdoutPipe, err := c.StdoutPipe()
 		if err != nil {
@@ -161,18 +187,9 @@ func runRsync(src, dest, addr string, isReportProgress bool, rc *client.ReportCl
 
 		var curProgressNum, totalProgressNum uint32
 		go readStdout(ctx, stdoutPipe, &curProgressNum, &totalProgressNum)
-		go reportProgress(ctx, &curProgressNum, &totalProgressNum, addr, rc, reportInterval)
+		go reportProgress(ctx, &curProgressNum, &totalProgressNum, req.ReportAddr, req.ReportClient, req.ReportInterval)
 
-	} else {
-		c = exec.Command(
-			rsyncBinPath,
-			rsyncOptionBasic,
-			rsyncOptionPartial,
-			src,
-			dest)
 	}
-
-	log.Println("[copy-Info]cmd string:", c.String())
 
 	// because of get exit code from stderr, so always read stderr
 	log.Println("[copy-Info]read stderr of cmd turn on")

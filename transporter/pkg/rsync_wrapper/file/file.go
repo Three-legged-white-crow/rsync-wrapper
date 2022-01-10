@@ -12,12 +12,20 @@ import (
 
 const (
 	rsyncBinPath       = "/usr/local/bin/rsync"
-	rsyncOptionBasic   = "-rlptgoHAS"
+	rsyncOptionBasic   = "-rlptgoHA"
 	rsyncOptionPartial = "--partial"
+	rsyncOptionSparse  = "--sparse"
 	retryMaxLimit      = 3
 )
 
-func CopyFile(src, dest string, retryLimt int) int {
+type ReqContent struct {
+	SrcPath        string
+	DestPath       string
+	IsHandleSparse bool
+	RetryLimit     int
+}
+
+func CopyFile(req ReqContent) int {
 
 	var (
 		finalExitCode     int
@@ -28,22 +36,25 @@ func CopyFile(src, dest string, retryLimt int) int {
 		err               error
 	)
 
-	currentRetryLimit = retryLimt
+	currentRetryLimit = req.RetryLimit
 	if currentRetryLimit < 0 {
 		currentRetryLimit = retryMaxLimit
 	}
+
+	cmdContent := []string{rsyncOptionBasic, rsyncOptionPartial}
+	if req.IsHandleSparse {
+		cmdContent = append(cmdContent, rsyncOptionSparse)
+	}
+
+	cmdContent = append(cmdContent, req.SrcPath)
+	cmdContent = append(cmdContent, req.DestPath)
 
 	for {
 		if currentRetryNum > currentRetryLimit {
 			return exit_code.ErrRetryLimit
 		}
 
-		c := exec.Command(
-			rsyncBinPath,
-			rsyncOptionBasic,
-			rsyncOptionPartial,
-			src,
-			dest)
+		c := exec.Command(rsyncBinPath, cmdContent...)
 
 		stdoutStderr, err = c.CombinedOutput()
 		if err == nil {
@@ -58,8 +69,8 @@ func CopyFile(src, dest string, retryLimt int) int {
 		processExitErr, ok = err.(*exec.ExitError)
 		if !ok {
 			log.Println(
-				"[CopyFile-Error]Get err but not ExitError when copy src:", src,
-				"to dest:", dest,
+				"[CopyFile-Error]Get err but not ExitError when copy src:", req.SrcPath,
+				"to dest:", req.DestPath,
 				"and err:", err.Error())
 			return exit_code.ErrSystem
 		}
@@ -72,8 +83,8 @@ func CopyFile(src, dest string, retryLimt int) int {
 		processExitCode := processExitErr.ExitCode()
 		if rsync_wrapper.IsErrUnRecoverable(processExitCode) {
 			log.Println(
-				"[CopyFile-Error]Get unrecoverable err when copy src:", src,
-				"to dest:", dest,
+				"[CopyFile-Error]Get unrecoverable err when copy src:", req.SrcPath,
+				"to dest:", req.DestPath,
 				"and err:", processExitErr.Error())
 			finalExitCode = rsync_wrapper.ExitCodeConvert(processExitCode)
 			return finalExitCode

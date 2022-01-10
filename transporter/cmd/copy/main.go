@@ -23,6 +23,7 @@ const (
 	emptyValue         = "empty"
 	slash              = '/'
 	slashStr           = "/"
+	sepFilterRule      = "|"
 	waitNFSCliUpdate   = 5
 	waitNFSCcliLimit   = 5
 	defaultLimtReadDir = 100
@@ -113,12 +114,22 @@ func main() {
 		false,
 		"enable debug mode")
 
+	isHandleSparse := flag.Bool(
+		"sparse",
+		false,
+		"try to handle sparse files efficiently")
+
+	filterRule := flag.String(
+		"filter",
+		emptyValue,
+		"rules to selectively exclude certain files, use '|' to separate multiple rules, avoid file names containing '|'")
+
 	flag.Parse()
 
 	// set output of standard logger to stderr
 	log.SetOutput(os.Stderr)
 
-	log.Println("[copy-Info]New transporter request: srcRelativePath:", *srcRelativePath,
+	log.Println("[copy-Info]New copy request: srcRelativePath:", *srcRelativePath,
 		"destTempDirRelativePath:", *destTempDirRelativePath,
 		"destFinalDirRelativePath:", *destFinalDirRelativePath,
 		"srcMountPath:", *srcMountPath,
@@ -133,6 +144,8 @@ func main() {
 		"isGenerateChecksumFile:", *isGenerateChecksumFile,
 		"fileSuffixForChecksum:", *fileSuffixForChecksum,
 		"trackFileRelativePath:", *trackFileRelativePath,
+		"isHandleSparse:", *isHandleSparse,
+		"filterRule:", *filterRule,
 		"isDebug:", *isDebug,
 	)
 
@@ -348,11 +361,16 @@ func main() {
 			os.Exit(exit_code.ErrDirectoryNestedItself)
 		}
 
+		var filterRuleList []string
+		if *filterRule != emptyValue {
+			filterRuleList = strings.Split(*filterRule, sepFilterRule)
+		}
+
 		log.Println("[copy-Info]Src is dir, ready copy")
 		if *isExcludeSrcDir {
 			log.Println("[copy-Info]Start check final dest dir has same name file or dir that wait copy")
 			var isDestFinalDirAvailable bool
-			isDestFinalDirAvailable, err = checkDestFinalDir(srcPath1, destFinalDirPath)
+			isDestFinalDirAvailable, err = checkDestFinalDir(srcPath1, destFinalDirPath, filterRuleList)
 			if err != nil {
 				log.Println("[copy-Error]Faild to check final dest dir is available:", destFinalDirPath,
 					"and err:", err.Error())
@@ -372,15 +390,17 @@ func main() {
 
 		rc := client.NewReportClient()
 
-		reqCopyDir := dir.ReqRun{
+		reqCopyDir := dir.ReqContent{
 			SrcPath:          srcPath1,
 			DestPath:         destTempDirPath,
 			IsReportProgress: *isReportProgress,
 			IsReportStderr:   *isReportStderr,
+			IsHandleSparse:   *isHandleSparse,
 			ReportClient:     rc,
 			ReportInterval:   *intervalReport,
 			ReportAddr:       *addrReport,
 			RetryLimit:       *retryLimit,
+			FilterList:       filterRuleList,
 		}
 
 		startTime := time.Now().String()
@@ -467,7 +487,13 @@ func main() {
 	destTempFileName := destTempDirPath + fileName
 	destTempCheckFileName := destTempFileName + checksum.MD5Suffix
 	destFinalCheckFileName := destFinalFileName + checksum.MD5Suffix
-	exitCode = file.CopyFile(srcPath1, destTempFileName, *retryLimit)
+	reqCopyFile := file.ReqContent{
+		SrcPath:        srcPath1,
+		DestPath:       destTempFileName,
+		IsHandleSparse: *isHandleSparse,
+		RetryLimit:     *retryLimit,
+	}
+	exitCode = file.CopyFile(reqCopyFile)
 	if exitCode != exit_code.Succeed {
 		log.Println("[copy-Error]Failed to copy(1) file from src:", srcPath1,
 			"to dest:", destTempFileName,
@@ -499,7 +525,7 @@ func main() {
 
 			log.Println("[copy-Info]Internal retry at copy file, start copy(2) file from src:", srcPath1,
 				"to dest:", destTempFileName)
-			exitCode = file.CopyFile(srcPath1, destTempFileName, *retryLimit)
+			exitCode = file.CopyFile(reqCopyFile)
 			if exitCode != exit_code.Succeed {
 				log.Println(
 					"[copy-Error]Internal retry at copy file, failed to copy(2) file from src:", srcPath1,
@@ -622,47 +648,93 @@ func isNeedChecksum(fileName string, fileSuffixList []string) bool {
 	return false
 }
 
-func checkDestFinalDir(srcDirPath, destDirPath string) (bool, error) {
+func checkDestFinalDir(srcDirPath, destDirPath string, filterList []string) (bool, error) {
+
+	srcLen := len(srcDirPath)
+	destLen := len(destDirPath)
+	if srcDirPath[srcLen-1] != slash {
+		srcDirPath += slashStr
+	}
+	if destDirPath[destLen-1] != slash {
+		destDirPath += slashStr
+	}
+
 	var (
-		sf  *os.File
+		df  *os.File
 		err error
 	)
-	sf, err = os.Open(srcDirPath)
+	df, err = os.Open(destDirPath)
 	if err != nil {
 		log.Println(
-			"[copy-Error]Failed to open src dir:", srcDirPath,
+			"[copy-Error]Failed to open dest dir:", destDirPath,
 			"and err:", err.Error())
 		return false, err
 	}
-	defer sf.Close()
+	defer df.Close()
 
 	var (
 		nameList    []string
 		newFilePath string
+		nf          os.FileInfo
+		isFilter    bool
 	)
 	for {
-		nameList, err = sf.Readdirnames(defaultLimtReadDir)
+		nameList, err = df.Readdirnames(defaultLimtReadDir)
 		if err != nil {
 			if errors.Is(err, io.EOF) {
 				log.Println(
-					"[copy-Info]Get EOF when read dir name list of src dir:", srcDirPath)
+					"[copy-Info]Get EOF when read dir name list of dest dir:", destDirPath)
 				break
 			}
 			log.Println(
-				"[copy-Error]Failed to read name list of src dir:", srcDirPath,
+				"[copy-Error]Failed to read name list of dest dir:", destDirPath,
 				"and err:", err.Error())
 
 			return false, err
 		}
 
 		for _, name := range nameList {
-			newFilePath = destDirPath + name
-			_, err = os.Stat(newFilePath)
+			newFilePath = srcDirPath + name
+			nf, err = os.Stat(newFilePath)
 			if err == nil {
-				// new file is exist
-				log.Println("[copy-Error]New file:", newFilePath,
-					"is already exist at dest dir:", destDirPath)
-				return false, nil
+				// newfile is a dir at src dir
+				if nf.IsDir() {
+
+					// dir name: f1
+					// filters:[- f1] or [- f1/]
+					isFilter = isMatchFilterRule(name, filterList, true)
+					if isFilter {
+						continue
+					}
+
+					// filters: [- f2, - f3]
+					log.Println("[copy-Error]Dir:", name,
+						"is exist at both src dir:", srcDirPath,
+						"and dest dir:", destDirPath)
+					return false, nil
+				}
+
+				// newfile is a file at src dir
+				// file name: f1
+				// filters: [- f1/]
+				isFilter = isMatchFilterRule(name+slashStr, filterList, false)
+				if isFilter {
+					log.Println("[copy-Error]File:", name,
+						"is exist at both src dir:", srcDirPath,
+						"and dest dir:", destDirPath)
+					return false, nil
+				}
+
+				// filters: [- f2, - f3]
+				isFilter = isMatchFilterRule(name, filterList, false)
+				if !isFilter {
+					log.Println("[copy-Error]File:", name,
+						"is exist at both src dir:", srcDirPath,
+						"and dest dir:", destDirPath)
+					return false, nil
+				}
+
+				// filters: [- f1]
 			}
 
 			// get err when stat new file
@@ -677,6 +749,33 @@ func checkDestFinalDir(srcDirPath, destDirPath string) (bool, error) {
 	}
 
 	return true, nil
+}
+
+func isMatchFilterRule(s string, filters []string, isDir bool) bool {
+	var s1 string
+	if isDir {
+		s1 = s + slashStr
+	}
+
+	for _, r := range filters {
+		if len(r) == 0 {
+			continue
+		}
+
+		if strings.HasSuffix(r, s) {
+			return true
+		}
+
+		if len(s1) == 0 {
+			continue
+		}
+
+		if strings.HasSuffix(r, s1) {
+			return true
+		}
+	}
+
+	return false
 }
 
 func buildFlagFilePath(dirPath string) (flagFilePath string) {

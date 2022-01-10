@@ -109,6 +109,11 @@ func main() {
 		-1,
 		"limit of retry copy, default limit is 3")
 
+	isHandleSparse := flag.Bool(
+		"sparse",
+		false,
+		"try to handle sparse files efficiently")
+
 	isDebug := flag.Bool(
 		"debug",
 		false,
@@ -132,6 +137,7 @@ func main() {
 		"fileSuffixForChecksum:", *fileSuffixForChecksum,
 		"isRemoveInRecordFile:", *isRemoveInRecordFile,
 		"retryLimit:", *retryLimit,
+		"isHandleSparse:", *isHandleSparse,
 		"isDebug:", *isDebug,
 	)
 
@@ -401,6 +407,7 @@ func main() {
 		numIgSrcNOENT int
 		numIgDestDir  int
 		numOverWrite  int
+		reqCopyFile   file.ReqContent
 	)
 
 	outputWriter = bufio.NewWriter(outputF)
@@ -723,7 +730,11 @@ func main() {
 			continue
 		}
 
-		exitCode = file.CopyFile(srcPath, destPath, *retryLimit)
+		reqCopyFile.SrcPath = srcPath
+		reqCopyFile.DestPath = destPath
+		reqCopyFile.IsHandleSparse = *isHandleSparse
+		reqCopyFile.RetryLimit = *retryLimit
+		exitCode = file.CopyFile(reqCopyFile)
 		if exitCode != exit_code.Succeed {
 			// try remove dest file to clean dest to clean dest
 			_ = os.Remove(destPath)
@@ -779,7 +790,7 @@ func main() {
 					continue
 				}
 
-				exitCode = file.CopyFile(srcPath, destPath, *retryLimit)
+				exitCode = file.CopyFile(reqCopyFile)
 				if exitCode != exit_code.Succeed {
 					// try remove dest file and checksum file to clean dest
 					_ = os.Remove(destPath)
