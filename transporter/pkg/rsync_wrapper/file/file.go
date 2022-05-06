@@ -51,10 +51,12 @@ func CopyFile(req ReqContent) int {
 
 	for {
 		if currentRetryNum > currentRetryLimit {
+			log.Println("[CopyFile-Error]Retry limit reached, exit with ErrRetryLImit(208)")
 			return exit_code.ErrRetryLimit
 		}
 
 		c := exec.Command(rsyncBinPath, cmdContent...)
+		log.Println("[CopyFile-Info]Run command:", c.String(), "retry number:", currentRetryNum)
 
 		stdoutStderr, err = c.CombinedOutput()
 		if err == nil {
@@ -74,9 +76,14 @@ func CopyFile(req ReqContent) int {
 				"and err:", err.Error())
 			return exit_code.ErrSystem
 		}
+		log.Println(
+			"[CopyFile-Error]Get subprocess exit error:", processExitErr.Error(),
+			"exit code:", processExitErr.ExitCode(),
+			"subprocess pid", processExitErr.Pid())
 
 		finalExitCode, ok = rsync_wrapper.ExitCodeConvertWithStderr(string(stdoutStderr))
 		if ok {
+			log.Println("[CopyFile-Error]Matched stand file system exit code and exit:", finalExitCode)
 			return finalExitCode
 		}
 
@@ -91,6 +98,7 @@ func CopyFile(req ReqContent) int {
 		}
 
 		currentRetryNum += 1
+		log.Println("[CopyFile-Warning]Get exit error but it is a recoverable error, will retry exec command")
 		continue
 	}
 

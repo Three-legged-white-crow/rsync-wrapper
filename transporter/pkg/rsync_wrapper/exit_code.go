@@ -1,9 +1,11 @@
+//go:build amd64 && linux
 // +build amd64,linux
 
 package rsync_wrapper
 
 import (
 	"errors"
+	"log"
 	"os"
 	"strings"
 
@@ -198,20 +200,32 @@ func ExitCodeConvert(errCode int) int {
 }
 
 func ExitCodeConvertWithStderr(errContent string) (int, bool) {
+	if len(errContent) == 0 {
+		log.Println("[Match-FS-ExitCode]Combined output is empty, end match")
+		return 0, false
+	}
+
+	log.Println("[Match-FS-ExitCode]Combined output:", errContent)
 	errStrList := strings.Split(errContent, "\n")
 
 	errStrLen := len(errStrList)
 	var curErrStr string
-	for i := errStrLen-1; i >= 0; i -= 1 {
+	for i := errStrLen - 1; i >= 0; i -= 1 {
 		curErrStr = errStrList[i]
 
 		for _, msg := range stdExitCodeMsgList {
 			if strings.Contains(curErrStr, msg) {
 				exitCode := stdExitCodeMap[msg]
+				log.Println(
+					"[Match-FS-ExitCode]Succeed to match fs errMsg:", msg,
+					"output line num:", i,
+					"output line content:", curErrStr,
+					"fs exit code:", exitCode)
 				return exitCode, true
 			}
 		}
 	}
 
+	log.Println("[Match-FS-ExitCode]All combined output has been match with fs errmsg, nothing matched")
 	return 0, false
 }
