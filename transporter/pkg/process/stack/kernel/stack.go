@@ -1,4 +1,4 @@
-package stack
+package kernel
 
 import (
 	"errors"
@@ -17,6 +17,7 @@ const (
 	procBase             = "/proc/"
 	procProcessTasks     = "/task/"
 	procProcessStackFile = "/stack"
+	kernelStackDir       = "/kernel/"
 	defaultLimtReadDir   = 100
 	slashChar            = '/'
 	slashStr             = "/"
@@ -81,12 +82,12 @@ func CombinedStack(pid int32, saveDir string) error {
 	if err != nil {
 		return err
 	}
-	log.Println("[Stack-Debug]Get task stack path list:", taskStackPathList, "of pid:", pid)
+	log.Println("[Stack-Debug]Get task kernel stack path list:", taskStackPathList, "of pid:", pid)
 
 	if saveDir[len(saveDir)-1] != slashChar {
 		saveDir += slashStr
 	}
-	processStackDir := saveDir + strconv.Itoa(int(pid))
+	processStackDir := saveDir + strconv.Itoa(int(pid)) + kernelStackDir
 	err = filesystem.CheckOrCreateDir(processStackDir)
 	if err != nil {
 		return err
@@ -100,7 +101,7 @@ func CombinedStack(pid int32, saveDir string) error {
 		permFileDefault)
 	if err != nil {
 		log.Println(
-			"[Stack-Error]Failed to open combined stack file, err:",
+			"[Stack-Error]Failed to open combined kernel stack file, err:",
 			err.Error())
 		return err
 	}
@@ -113,7 +114,7 @@ func CombinedStack(pid int32, saveDir string) error {
 	for _, taskStackPath := range taskStackPathList {
 		stackContent, err = os.ReadFile(taskStackPath)
 		if err != nil {
-			log.Println("[Stack-Warning]Failed to read stack of thread:", taskStackPath)
+			log.Println("[Stack-Warning]Failed to read kernel stack of thread:", taskStackPath)
 			continue
 		}
 
@@ -127,13 +128,13 @@ func CombinedStack(pid int32, saveDir string) error {
 	_, err = curCombinedStackFileInfo.WriteString(stackBuilder.String())
 	if err != nil {
 		log.Println(
-			"[Stack-Error]Failed to write combined stack to combined file:",
+			"[Stack-Error]Failed to write combined kernel stack to combined file:",
 			curCombinedStackFilePath,
 			"err:", err.Error())
 		_ = curCombinedStackFileInfo.Close()
 		return err
 	}
-	log.Println("[Stack-Debug]Succeed to write combined stack to combined file:", curCombinedStackFilePath)
+	log.Println("[Stack-Debug]Succeed to write combined kernel stack to combined file:", curCombinedStackFilePath)
 
 	_ = curCombinedStackFileInfo.Close()
 	return nil

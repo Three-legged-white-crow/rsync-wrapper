@@ -15,7 +15,8 @@ import (
 	"transporter/pkg/filesystem"
 	"transporter/pkg/process"
 	"transporter/pkg/process/id"
-	"transporter/pkg/process/stack"
+	"transporter/pkg/process/stack/kernel"
+	"transporter/pkg/process/stack/user"
 	"transporter/pkg/rsync_wrapper"
 )
 
@@ -124,17 +125,31 @@ func dumpStack() {
 
 		// combined rsync-wrapper process stack;
 		// current process is rsync-wrapper process;
-		err = stack.CombinedStack(wrapperPid, saveDir)
+		err = kernel.CombinedStack(wrapperPid, saveDir)
 		if err != nil {
 			log.Println(
-				"[CopyFile-Warning]Failed to get combined stack info of wrapper process, task:", taskID,
+				"[CopyFile-Warning]Failed to get combined kernel stack info of wrapper process, task:", taskID,
 				", wrapper pid:", wrapperPid,
 				", saveDir:", saveDir,
 				" and err:", err.Error())
 			continue
 		}
 		log.Println(
-			"[CopyFile-Info]Succeed to dump combined stack of wrapper process, task:", taskID,
+			"[CopyFile-Info]Succeed to dump combined kernel stack of wrapper process, task:", taskID,
+			", wrapper pid:", wrapperPid,
+			"and saveDir:", saveDir)
+
+		err = user.GoroutineStackFile(wrapperPid, saveDir)
+		if err != nil {
+			log.Println(
+				"[CopyFile-Warning]Failed to get combined user stack info of wrapper process, task:", taskID,
+				", wrapper pid:", wrapperPid,
+				", saveDir:", saveDir,
+				" and err:", err.Error())
+			continue
+		}
+		log.Println(
+			"[CopyFile-Info]Succeed to dump combined user stack of wrapper process, task:", taskID,
 			", wrapper pid:", wrapperPid,
 			"and saveDir:", saveDir)
 
@@ -161,16 +176,29 @@ func dumpStack() {
 			continue
 		}
 
-		err = stack.CombinedStack(senderPid, saveDir)
+		err = kernel.CombinedStack(senderPid, saveDir)
 		if err != nil {
 			log.Println(
-				"[CopyFile-Warning]Failed to get combined stack info of sender process, task:", taskID,
+				"[CopyFile-Warning]Failed to get combined kernel stack info of sender process, task:", taskID,
 				", sender pid:", senderPid,
 				", saveDir:", saveDir,
 				" and err:", err.Error())
 			continue
 		}
-		log.Println("[CopyFile-Info]Succeed to get combined stack of sender process, task:", taskID,
+		log.Println("[CopyFile-Info]Succeed to get combined kernel stack of sender process, task:", taskID,
+			", sender pid:", senderPid,
+			"and saveDir:", saveDir)
+
+		err = user.StackFile(senderPid, saveDir)
+		if err != nil {
+			log.Println(
+				"[CopyFile-Warning]Failed to get combined user stack info of sender process, task:", taskID,
+				", sender pid:", senderPid,
+				", saveDir:", saveDir,
+				" and err:", err.Error())
+			continue
+		}
+		log.Println("[CopyFile-Info]Succeed to get combined user stack of sender process, task:", taskID,
 			", sender pid:", senderPid,
 			"and saveDir:", saveDir)
 
@@ -196,16 +224,29 @@ func dumpStack() {
 				"and childrens:", childrens)
 			continue
 		}
-		err = stack.CombinedStack(receiverPid, saveDir)
+		err = kernel.CombinedStack(receiverPid, saveDir)
 		if err != nil {
 			log.Println(
-				"[CopyFile-Warning]Failed to get combined stack info of receiver process, task:", taskID,
+				"[CopyFile-Warning]Failed to get combined kernel stack info of receiver process, task:", taskID,
 				", receiver pid:", receiverPid,
 				", saveDir:", saveDir,
 				" and err:", err.Error())
 			continue
 		}
-		log.Println("[CopyFile-Info]Succeed to get combined stack of receiver process, task:", taskID,
+		log.Println("[CopyFile-Info]Succeed to get combined kernel stack of receiver process, task:", taskID,
+			", receiver pid:", receiverPid,
+			"and saveDir:", saveDir)
+
+		err = user.StackFile(receiverPid, saveDir)
+		if err != nil {
+			log.Println(
+				"[CopyFile-Warning]Failed to get combined user stack info of receiver process, task:", taskID,
+				", receiver pid:", receiverPid,
+				", saveDir:", saveDir,
+				" and err:", err.Error())
+			continue
+		}
+		log.Println("[CopyFile-Info]Succeed to get combined user stack of receiver process, task:", taskID,
 			", receiver pid:", receiverPid,
 			"and saveDir:", saveDir)
 
@@ -230,16 +271,29 @@ func dumpStack() {
 				"and childrens:", childrens)
 			continue
 		}
-		err = stack.CombinedStack(generatorPid, saveDir)
+		err = kernel.CombinedStack(generatorPid, saveDir)
 		if err != nil {
 			log.Println(
-				"[CopyFile-Warning]Failed to get combined stack info of generator process, task:", taskID,
+				"[CopyFile-Warning]Failed to get combined kernel stack info of generator process, task:", taskID,
 				", generator pid:", generatorPid,
 				", saveDir:", saveDir,
 				" and err:", err.Error())
 			continue
 		}
-		log.Println("[CopyFile-Info]Succeed to get combined stack of generator process, task:", taskID,
+		log.Println("[CopyFile-Info]Succeed to get combined kernel stack of generator process, task:", taskID,
+			", generator pid:", generatorPid,
+			"and saveDir:", saveDir)
+
+		err = user.StackFile(generatorPid, saveDir)
+		if err != nil {
+			log.Println(
+				"[CopyFile-Warning]Failed to get combined user stack info of generator process, task:", taskID,
+				", generator pid:", generatorPid,
+				", saveDir:", saveDir,
+				" and err:", err.Error())
+			continue
+		}
+		log.Println("[CopyFile-Info]Succeed to get combined user stack of generator process, task:", taskID,
 			", generator pid:", generatorPid,
 			"and saveDir:", saveDir)
 
