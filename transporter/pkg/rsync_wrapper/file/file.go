@@ -104,7 +104,7 @@ func dumpStack() {
 
 	// process tree:
 	// - rsync-wrapper           --> wrapper
-	//	 - rsync sender          --> rsync
+	//   - rsync sender          --> rsync
 	//     - rsync receiver      --> rsync
 	//       - rsync generator   --> rsync
 
