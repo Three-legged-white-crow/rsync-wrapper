@@ -15,7 +15,7 @@ import (
 
 const (
 	procBase             = "/proc/"
-	procProcessTasks     = "task/"
+	procProcessTasks     = "/task/"
 	procProcessStackFile = "/stack"
 	defaultLimtReadDir   = 100
 	slashChar            = '/'
@@ -37,8 +37,9 @@ func GetStackPathList(pid int32) ([]string, error) {
 	}
 
 	var (
-		taskNameList  []string
-		taskStackPath string
+		taskNameList      []string
+		taskStackPathList []string
+		taskStackPath     string
 	)
 
 	for {
@@ -55,11 +56,11 @@ func GetStackPathList(pid int32) ([]string, error) {
 
 		for _, tn := range taskNameList {
 			taskStackPath = tasksDir + tn + procProcessStackFile
-			taskNameList = append(taskNameList, taskStackPath)
+			taskStackPathList = append(taskStackPathList, taskStackPath)
 		}
 	}
 
-	return taskNameList, nil
+	return taskStackPathList, nil
 }
 
 func CombinedStack(pid int32, saveDir string) error {
@@ -80,6 +81,7 @@ func CombinedStack(pid int32, saveDir string) error {
 	if err != nil {
 		return err
 	}
+	log.Println("[Stack-Debug]Get task stack path list:", taskStackPathList, "of pid:", pid)
 
 	if saveDir[len(saveDir)-1] != slashChar {
 		saveDir += slashStr
@@ -131,6 +133,7 @@ func CombinedStack(pid int32, saveDir string) error {
 		_ = curCombinedStackFileInfo.Close()
 		return err
 	}
+	log.Println("[Stack-Debug]Succeed to write combined stack to combined file:", curCombinedStackFilePath)
 
 	_ = curCombinedStackFileInfo.Close()
 	return nil
