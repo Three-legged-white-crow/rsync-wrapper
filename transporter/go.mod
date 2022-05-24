@@ -2,4 +2,4 @@ module transporter
 
 go 1.17
 
-require golang.org/x/sys v0.0.0-20211108224332-cbcd623f202e
+require golang.org/x/sys v0.0.0-20220128215802-99c3d69c2c27

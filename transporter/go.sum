@@ -1,2 +1,2 @@
-golang.org/x/sys v0.0.0-20211108224332-cbcd623f202e h1:9nbuBbpiqktwdlzHKUohsD5+y2a0QvX98gIWK2ARkqc=
-golang.org/x/sys v0.0.0-20211108224332-cbcd623f202e/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
+golang.org/x/sys v0.0.0-20220128215802-99c3d69c2c27 h1:XDXtA5hveEEV8JB2l7nhMTp3t3cHp9ZpwcdjqyEWLlo=
+golang.org/x/sys v0.0.0-20220128215802-99c3d69c2c27/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
