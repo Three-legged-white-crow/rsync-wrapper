@@ -1,5 +1,8 @@
 .PHONY: all
 
+DATE=$(shell date -u '+%Y-%m-%d_%H-%M-%S')
+GIT_VERSION=$(shell git rev-parse HEAD)
+
 all: check build
 
 check:
@@ -52,3 +55,29 @@ copy-clean:
 
 copylist-clean:
 	rm -f cmd/copylist/copylist
+
+bin-collect:
+	mv cmd/checksum/checksum transporter_bin/
+	mv cmd/create_wrapper/create-wrapper transporter_bin/
+	mv cmd/mv_wrapper/mv-wrapper transporter_bin/
+	mv cmd/rm_wrapper/rm-wrapper transporter_bin/
+	mv cmd/stat_wrapper/stat-wrapper transporter_bin/
+	mv cmd/copy/copy transporter_bin/
+	mv cmd/copylist/copylist transporter_bin/
+
+bin-compress:
+	tar -Jcvf "transporter_bin_${DATE}_${GIT_VERSION}.tar.xz" transporter_bin/
+
+collect-clean:
+	rm -rf transporter_bin/*
+
+
+tool: user-stack
+
+user-stack:
+	go build -o tool/stack/user-stack tool/stack/user.go
+
+tool-clean: user-stack-clean
+
+user-stack-clean:
+	rm -f tool/stack/user-stack
