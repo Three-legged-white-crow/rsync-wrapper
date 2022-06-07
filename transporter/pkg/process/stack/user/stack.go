@@ -17,7 +17,8 @@ const (
 	stackBufCap       = 64 * 1024
 	gdbBin            = "/usr/bin/gdb"
 	gdbBatchMode      = "-batch"
-	gdbDumpAllThread  = "-ex 'thread apply all bt'"
+	gdbExecutCommand  = "-ex"
+	gdbDumpAllThread  = "thread apply all bt"
 	gdbSpecifyProcess = "-p"
 	slashChar         = '/'
 	slashStr          = "/"
@@ -91,7 +92,8 @@ func GoroutineStackFile(pid int32, saveDir string) error {
 
 func Stack(pid int32) ([]byte, error) {
 	pidstr := strconv.Itoa(int(pid))
-	c := exec.Command(gdbBin, gdbBatchMode, gdbDumpAllThread, gdbSpecifyProcess, pidstr)
+	c := exec.Command(gdbBin, gdbBatchMode, gdbExecutCommand, gdbDumpAllThread, gdbSpecifyProcess, pidstr)
+	log.Println("[Stack-Debug]gdb cmd:", c.String())
 	out, err := c.CombinedOutput()
 	if err != nil {
 		return nil, err
@@ -138,6 +140,11 @@ func StackFile(pid int32, saveDir string) error {
 
 	stackContent, err := Stack(pid)
 	if err != nil {
+		log.Println(
+			"[Stack-Error]Failed to get combined user stack:",
+			curCombinedStackFilePath,
+			"err:", err.Error())
+		_ = curCombinedStackFileInfo.Close()
 		return err
 	}
 	_, err = curCombinedStackFileInfo.Write(stackContent)
