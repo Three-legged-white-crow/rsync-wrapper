@@ -2,6 +2,7 @@ package client
 
 import (
 	"bytes"
+	"io"
 	"log"
 	"net/http"
 	"time"
@@ -59,6 +60,7 @@ func (rc *ReportClient) Report(reportAddr, contentType string, data []byte) erro
 	if err != nil {
 		return err
 	}
+	_, _ = io.Copy(io.Discard, resp.Body)
 	_ = resp.Body.Close()
 	return nil
 }
