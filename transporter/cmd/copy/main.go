@@ -617,7 +617,7 @@ func main() {
 	log.Println("[copy-Info]Remove temp dest dir:", destTempDirPath)
 	err = os.RemoveAll(destTempDirPath)
 	if err != nil {
-		log.Println("[copy-Waring]Failed to remove temp dest dir:", destTempDirPath,
+		log.Println("[copy-Warning]Failed to remove temp dest dir:", destTempDirPath,
 			"and err:", err.Error())
 	} else {
 		log.Println("[copy-Info]Succeed to remove temp dest dir:", destTempDirPath)
@@ -665,6 +665,10 @@ func checkDestFinalDir(srcDirPath, destDirPath string, filterList []string) (boo
 	)
 	df, err = os.Open(destDirPath)
 	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			log.Println("[copy-Info]Dest dir:", destDirPath, "is not exist")
+			return true, nil
+		}
 		log.Println(
 			"[copy-Error]Failed to open dest dir:", destDirPath,
 			"and err:", err.Error())
