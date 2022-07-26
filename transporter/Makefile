@@ -9,7 +9,7 @@ check:
 	@curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.42.1
 	golangci-lint run
 
-build: checksum create-wrapper mv-wrapper rm-wrapper stat-wrapper copy copylist
+build: checksum create-wrapper mv-wrapper rm-wrapper stat-wrapper copy copy-cleaner copylist
 
 checksum:
 	go build -o cmd/checksum/checksum cmd/checksum/main.go
@@ -29,11 +29,14 @@ stat-wrapper:
 copy:
 	go build -tags netgo -o cmd/copy/copy cmd/copy/main.go
 
+copy-cleaner:
+	go build -o cmd/copy_cleaner/copy-cleaner cmd/copy_cleaner/main.go
+
 copylist:
 	go build -o cmd/copylist/copylist cmd/copylist/main.go
 
 
-clean: checksum-clean create-wrapper-clean mv-wrapper-clean rm-wrapper-clean stat-wrapper-clean copy-clean copylist-clean
+clean: checksum-clean create-wrapper-clean mv-wrapper-clean rm-wrapper-clean stat-wrapper-clean copy-clean copy-cleaner-clean copylist-clean
 
 checksum-clean:
 	rm -f cmd/checksum/checksum
@@ -53,6 +56,9 @@ stat-wrapper-clean:
 copy-clean:
 	rm -f cmd/copy/copy
 
+copy-cleaner-clean:
+	rm -f cmd/copy_cleaner/copy-cleaner
+
 copylist-clean:
 	rm -f cmd/copylist/copylist
 
@@ -63,6 +69,7 @@ bin-collect:
 	mv cmd/rm_wrapper/rm-wrapper transporter_bin/
 	mv cmd/stat_wrapper/stat-wrapper transporter_bin/
 	mv cmd/copy/copy transporter_bin/
+	mv cmd/copy_cleaner/copy-cleaner transporter_bin/
 	mv cmd/copylist/copylist transporter_bin/
 
 bin-compress:

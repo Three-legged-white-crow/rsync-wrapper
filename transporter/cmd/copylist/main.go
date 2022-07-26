@@ -38,7 +38,7 @@ const (
 	errcodeRecordIndex      = 2
 	recordDirtyChar         = '"'
 	recordDirtyStr          = `"`
-	permFileDefault         = 0775
+	permFileDefault         = 0664
 	errCodeAdditional       = 1200
 )
 

@@ -3,14 +3,17 @@ package main
 import (
 	"errors"
 	"flag"
+	"fmt"
 	"io"
 	"io/fs"
 	"log"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"time"
 
+	copy2 "transporter/internal/copy"
 	"transporter/pkg/checksum"
 	"transporter/pkg/client"
 	"transporter/pkg/exit_code"
@@ -27,8 +30,6 @@ const (
 	waitNFSCliUpdate   = 5
 	waitNFSCcliLimit   = 5
 	defaultLimtReadDir = 100
-	flagFileName       = "succeed-copy-file"
-	flagContent        = "The generation of this file indicates that all file copy operations have been completed"
 )
 
 func main() {
@@ -129,7 +130,7 @@ func main() {
 	// set output of standard logger to stderr
 	log.SetOutput(os.Stderr)
 
-	log.Println("[copy-Info]New copy request: srcRelativePath:", *srcRelativePath,
+	cmdReq := fmt.Sprint("[copy-Info]New copy request: srcRelativePath:", *srcRelativePath,
 		"destTempDirRelativePath:", *destTempDirRelativePath,
 		"destFinalDirRelativePath:", *destFinalDirRelativePath,
 		"srcMountPath:", *srcMountPath,
@@ -148,6 +149,8 @@ func main() {
 		"filterRule:", *filterRule,
 		"isDebug:", *isDebug,
 	)
+
+	log.Println(cmdReq)
 
 	log.Println("[copy-Info]Start basic check")
 	log.Println("[copy-Info]Start basic check format")
@@ -473,7 +476,7 @@ func main() {
 	}
 
 	// check succeed-copy-file is exist, if exist -> exit with succeed
-	if isCompleteFileCopy(destTempDirPath) {
+	if isCompleteCopy(destTempDirPath) {
 		log.Println(
 			"[copy-Info]Flag file: succeed-copy-file is exist, "+
 				"all step of file copy has been complete, exit with",
@@ -624,7 +627,7 @@ func main() {
 	}
 
 	// check and create flag file
-	err = setCompleteFlagFileCopy(srcPath1, destTempDirPath, destFinalDirPath)
+	err = setCompleteFlagCopy(srcPath1, destTempDirPath, destFinalDirPath, cmdReq)
 	if err != nil {
 		log.Println("[copy-Warning]Failed to create flag file and err:", err.Error())
 	}
@@ -782,18 +785,14 @@ func isMatchFilterRule(s string, filters []string, isDir bool) bool {
 	return false
 }
 
-func buildFlagFilePath(dirPath string) (flagFilePath string) {
-	dirPathLen := len(dirPath)
-	if dirPath[dirPathLen-1] == slash {
-		dirPath = dirPath[:dirPathLen-1]
-	}
-
-	flagFilePath = dirPath + "_" + flagFileName
+func buildCompleteFlagFilePath(dirPath string) (flagFilePath string) {
+	dirPath = path.Clean(dirPath)
+	flagFilePath = dirPath + copy2.CompleteFlagFileName
 	return flagFilePath
 }
 
-func isCompleteFileCopy(tmpDestDir string) bool {
-	flagFilePath := buildFlagFilePath(tmpDestDir)
+func isCompleteCopy(tmpDestDir string) bool {
+	flagFilePath := buildCompleteFlagFilePath(tmpDestDir)
 
 	log.Println("[copy-Info]Start check 'succeed-copy-file' is exist")
 	var (
@@ -839,9 +838,9 @@ func isCompleteFileCopy(tmpDestDir string) bool {
 
 }
 
-func setCompleteFlagFileCopy(src, tmpDestDir, finalDestDir string) error {
+func setCompleteFlagCopy(src, tmpDestDir, finalDestDir, cmdReq string) error {
 
-	flagFilePath := buildFlagFilePath(tmpDestDir)
+	flagFilePath := buildCompleteFlagFilePath(tmpDestDir)
 
 	log.Println("[copy-Info]Start create flag file of complete file copy:", flagFilePath)
 	f, err := os.Create(flagFilePath)
@@ -850,14 +849,14 @@ func setCompleteFlagFileCopy(src, tmpDestDir, finalDestDir string) error {
 	}
 
 	contentBuilder := strings.Builder{}
-	contentBuilder.WriteString(flagContent)
+	contentBuilder.WriteString(copy2.CompleteFlagHeader)
 	contentBuilder.WriteString("\n")
 	contentBuilder.WriteString("\n")
 	contentBuilder.WriteString("create or truncat at: ")
 	createTime := time.Now().String()
 	contentBuilder.WriteString(createTime)
 	contentBuilder.WriteString("\n")
-	contentBuilder.WriteString("src file path:")
+	contentBuilder.WriteString("src path:")
 	contentBuilder.WriteString(src)
 	contentBuilder.WriteString("\n")
 	contentBuilder.WriteString("tmp dir path:")
@@ -865,6 +864,9 @@ func setCompleteFlagFileCopy(src, tmpDestDir, finalDestDir string) error {
 	contentBuilder.WriteString("\n")
 	contentBuilder.WriteString("final dir path:")
 	contentBuilder.WriteString(finalDestDir)
+	contentBuilder.WriteString("\n")
+	contentBuilder.WriteString("cmd request:")
+	contentBuilder.WriteString(cmdReq)
 	_, err = f.WriteString(contentBuilder.String())
 	if err != nil {
 		return err

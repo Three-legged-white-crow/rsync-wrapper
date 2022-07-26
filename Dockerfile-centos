@@ -37,6 +37,7 @@ COPY --from=builder-transporter /projects/transporter/cmd/mv_wrapper/mv-wrapper 
 COPY --from=builder-transporter /projects/transporter/cmd/rm_wrapper/rm-wrapper /usr/local/bin/
 COPY --from=builder-transporter /projects/transporter/cmd/stat_wrapper/stat-wrapper /usr/local/bin/
 COPY --from=builder-transporter /projects/transporter/cmd/copy/copy /usr/local/bin/
+COPY --from=builder-transporter /projects/transporter/cmd/copy_cleaner/copy-cleaner /usr/local/bin/
 COPY --from=builder-transporter /projects/transporter/cmd/copylist/copylist /usr/local/bin/
 COPY --from=builder-rsync /projects/rsync/rsync /usr/local/bin/
 
@@ -53,6 +54,7 @@ RUN /usr/local/bin/checksum --help && \
     /usr/local/bin/rm-wrapper --help && \
     /usr/local/bin/stat-wrapper --help && \
     /usr/local/bin/copy --help && \
+    /usr/local/bin/copy-cleaner --help && \
     /usr/local/bin/copylist --help && \
     ldd /usr/local/bin/rsync && \
     /usr/local/bin/rsync --version

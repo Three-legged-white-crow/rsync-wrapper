@@ -15,9 +15,8 @@ const (
 	dot             = '.'
 	slashStr        = "/"
 	permDirDefault  = 0775
-	permFileDefault = 0775
+	permFileDefault = 0664
 )
-
 
 func CheckFilePathFormat(path string) bool {
 
@@ -55,7 +54,6 @@ func CheckFilePathFormat(path string) bool {
 	return true
 }
 
-
 func CheckOrCreateFile(filePath string, isOverWrite bool) error {
 	fInfo, err := os.Stat(filePath)
 	if err == nil {
@@ -84,9 +82,9 @@ func CheckOrCreateFile(filePath string, isOverWrite bool) error {
 		}
 	}
 
-	var openFlag int = unix.O_RDWR|unix.O_CREAT
+	var openFlag int = unix.O_RDWR | unix.O_CREAT
 	if isOverWrite {
-		openFlag = openFlag|unix.O_TRUNC
+		openFlag = openFlag | unix.O_TRUNC
 	}
 	_, err = os.OpenFile(filePath, openFlag, permFileDefault)
 	if err != nil {

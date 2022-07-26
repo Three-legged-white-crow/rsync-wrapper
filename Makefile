@@ -9,6 +9,7 @@ bin-collect:
 	mv transporter/cmd/rm_wrapper/rm-wrapper rsync-wrapper_bin/
 	mv transporter/cmd/stat_wrapper/stat-wrapper rsync-wrapper_bin/
 	mv transporter/cmd/copy/copy rsync-wrapper_bin/
+	mv transporter/cmd/copy_cleaner/copy-cleaner rsync-wrapper_bin/
 	mv transporter/cmd/copylist/copylist rsync-wrapper_bin/
 	mv rsync/rsync-static rsync-wrapper_bin/
 

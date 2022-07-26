@@ -7,8 +7,11 @@ import (
 	"io/fs"
 	"log"
 	"os"
+	"path"
 	"time"
 
+	copy2 "transporter/internal/copy"
+	"transporter/pkg/checksum"
 	"transporter/pkg/exit_code"
 	"transporter/pkg/filesystem"
 )
@@ -187,22 +190,24 @@ func main() {
 			- clean temp dest;
 			- clean track file (if exist);
 			- clean checksum file (if exist);
+			- clean flag file;
 
 		if src is file:
-			- stat file in final dest
-				- if exist, remove file;
+			- if final dest is exist
+				- try remove file;
 
 		if src is dir:
-			- if exclude src dir
-				- range src dir and search sub dir is exist in final dest dir
-					- if exist ==> remove sub dir from final dest dir;
-			- if not exclude src dir
-				- remove src dir from final dest dir;
+			- if final dest is exist
+				- if exclude src dir
+					- range src dir and search child dir is exist in final dest dir
+						- try remove child dir from final dest dir;
+				- if not exclude src dir
+					- remove src dir from final dest dir;
 
 		- remove temp dest dir;
-		- remove complate flag file/dir parent dir;
+		- remove complate flag file when copy file;
 		- remove track file (if exist);
-		- remove checksum file (if exist);
+		- remove checksum file (if exist) when copy file;
 		- complate clean
 	*/
 
@@ -235,7 +240,7 @@ func main() {
 	}
 	log.Println("[copyClean-Info]Check src path is exist...Exist")
 
-	log.Println("[copy-Info]Start check final dest dir is exist")
+	log.Println("[copyClean-Info]Start check final dest dir is exist")
 	var (
 		destFinalDirInfo    os.FileInfo
 		isDestFinalDirExist bool
@@ -243,17 +248,17 @@ func main() {
 	destFinalDirInfo, err = os.Stat(destFinalDirPath)
 	if err != nil {
 		if !errors.Is(err, fs.ErrNotExist) {
-			log.Println("[copy-Error]Failed to stat final dest dir:", destFinalDirPath, "and err:", err.Error())
+			log.Println("[copyClean-Error]Failed to stat final dest dir:", destFinalDirPath, "and err:", err.Error())
 			exitCode = exit_code.ExitCodeConvertWithErr(err)
 			os.Exit(exitCode)
 		}
 
 		isDestFinalDirExist = false
-		log.Println("[copy-Info]Check final dest dir...NotExist")
+		log.Println("[copyClean-Info]Check final dest dir...NotExist")
 	} else {
 		if !destFinalDirInfo.IsDir() {
-			log.Println("[copy-Info]Check final dest dir...Exist, but is file")
-			log.Println("[copy-Error]Final dest dir is a exist file")
+			log.Println("[copyClean-Info]Check final dest dir...Exist, but is file")
+			log.Println("[copyClean-Error]Final dest dir is a exist file")
 			os.Exit(exit_code.ErrNotDirectory)
 		}
 
@@ -264,7 +269,14 @@ func main() {
 		if srcInfo.IsDir() {
 			// case: cp -rf /home/dir1/* /home/dir2/ ==> /home/dir2/*
 			if *isExcludeSrcDir {
-				removeChild(srcPath, destFinalDirPath)
+				err = removeChild(srcPath, destFinalDirPath)
+				if err != nil {
+					log.Println("[copyClean-Warning]Get err when clean dest final dir:", destFinalDirPath,
+						"reference src dir", srcPath,
+						"and err:", err.Error())
+				} else {
+					log.Println("[copyClean-Info]Succeed to clean dest final:", destFinalDirPath, "with exclude src dir")
+				}
 			} else {
 				// case: cp -rf /home/dir1 /home/dir2/ ==> /home/dir2/dir1
 				srcDirName := srcInfo.Name()
@@ -290,10 +302,62 @@ func main() {
 			} else {
 				log.Println("[copyClean-Info]Succeed to remove dest final file:", destFinalFileName)
 			}
+
+			// try remove checksum file
+			destFinalChecksumFileName := destFinalFileName + checksum.MD5Suffix
+			err = os.Remove(destFinalChecksumFileName)
+			if err != nil {
+				if errors.Is(err, fs.ErrNotExist) {
+					log.Println("[copyClean-Info]Not exist checksum file:", destFinalChecksumFileName)
+				} else {
+					log.Println("[copyClean-Warning]Failed to remove checksum file:", destFinalChecksumFileName, "and err:", err.Error())
+				}
+			} else {
+				log.Println("[copyClean-Info]Succeed to remove checksum file:", destFinalChecksumFileName)
+			}
+
+			// try clean complete flag file
+			completeFlagFilePath := path.Clean(destTempDirPath) + copy2.CompleteFlagFileName
+			err = os.Remove(completeFlagFilePath)
+			if err != nil {
+				if errors.Is(err, fs.ErrNotExist) {
+					log.Println("[copyClean-Info]Not exist complete flag file:", completeFlagFilePath)
+				} else {
+					log.Println("[copyClean-Warning]Get err:", err.Error(), "when clean complete flag file")
+				}
+			} else {
+				log.Println("[copyClean-Info]Succeed to clean complete flag file:", completeFlagFilePath)
+			}
 		}
+
 	}
-	// checksum only for file
-	// destFinalCheckFileName := destFinalFileName + checksum.MD5Suffix
+
+	// clean temp dir
+	err = os.RemoveAll(destTempDirPath)
+	if err != nil {
+		log.Println("[copyClean-Warning]Get err:", err.Error(), "when clean temp dir:", destTempDirPath)
+	} else {
+		log.Println("[copyClean-Info]Succeed to clean temp dir:", destTempDirPath)
+	}
+
+	// clean track file
+	if isCleanTrackFile {
+		err = os.Remove(trackFilePath)
+		if err != nil {
+			if errors.Is(err, fs.ErrNotExist) {
+				log.Println("[copyClean-Info]Not exist track file:", trackFilePath)
+			} else {
+				log.Println("[copyClean-Warning]Get err:", err.Error(), "when remove track file:", trackFilePath)
+			}
+		} else {
+			log.Println("[copyClean-Info]Succeed to remove track file:", trackFilePath)
+		}
+	} else {
+		log.Println("[copyClean-Info]Not need clean track file")
+	}
+
+	log.Println("[copyClean-Info]Complete all clean, exit")
+	os.Exit(exit_code.Succeed)
 }
 
 func removeChild(rfcDir, targetDir string) error {
@@ -318,7 +382,6 @@ func removeChild(rfcDir, targetDir string) error {
 		err             error
 		nameList        []string
 		childname       string
-		rfcChildPath    string
 		targetChildPath string
 	)
 
@@ -343,9 +406,20 @@ func removeChild(rfcDir, targetDir string) error {
 
 		respSize = len(nameList)
 		for _, childname = range nameList {
-
+			targetChildPath = targetDir + childname
+			err = os.RemoveAll(targetChildPath)
+			if err != nil {
+				log.Println("[copyClean-Warning]Failed to remove target child:", targetChildPath, "and err:", err.Error())
+			}
 		}
 
+		_ = rfcDirF.Close()
+
+		// Finish when the end of the directory is reached
+		if respSize < defaultLimtReadDir {
+			break
+		}
 	}
 
+	return nil
 }
